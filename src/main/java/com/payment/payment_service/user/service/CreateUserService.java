@@ -11,6 +11,8 @@ import com.payment.payment_service.user.value_object.Email;
 import com.payment.payment_service.user.value_object.Password;
 import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.shared.crypto.HashUtil;
+import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.payment.payment_service.shared.event.UserCreatedEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +22,12 @@ public class CreateUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final KafkaEventProducer kafkaEventProducer;
 
-    public CreateUserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public CreateUserService(UserRepository userRepository, PasswordEncoder passwordEncoder, KafkaEventProducer kafkaEventProducer) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.kafkaEventProducer = kafkaEventProducer;
     }
 
     @Transactional
@@ -41,7 +45,7 @@ public class CreateUserService {
             throw new UserDocumentException("document already registered");
         }
 
-        final var user = new UserEntity();
+        final UserEntity user = new UserEntity();
         user.setName(name);
         user.setEmail(emailValue);
         user.setPassword(passwordEncoder.encode(passwordValue.value()));
@@ -50,6 +54,8 @@ public class CreateUserService {
         user.setDocumentHash(documentHash);
 
         userRepository.save(user);
+        kafkaEventProducer.publishUserCreated(new UserCreatedEvent(user.getId()));
+
         return user.getId();
     }
 }

@@ -23,7 +23,7 @@ public class CreateWalletService {
 
     @Transactional
     public void execute(UUID userId) {
-        if(walletRepository.findByUserId(userId) != null) {
+        if(walletRepository.findByUserId(userId).isPresent()) {
             throw new WalletAlreadyExistsException("Wallet already exists for user");
         }
 

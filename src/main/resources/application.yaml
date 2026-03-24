@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: payment-service
+  crypto:
+    secret: ${APP_CRYPTO_SECRET}
+

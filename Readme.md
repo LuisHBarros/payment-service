@@ -1,38 +1,39 @@
 # payment-service
 
-Documentação técnica · Versão 1.1 · 2026
+API REST para gerenciamento de pagamentos com arquitetura baseada em eventos · Java 21 · Spring Boot 3
 
 ---
 
-## 1. Visão Geral
+## 📋 Visão Geral
 
-O **payment-service** é uma API REST desenvolvida em Java 21 com Spring Boot 3, responsável por gerenciar usuários, carteiras digitais e transferências financeiras entre pessoas físicas (COMMON) e lojistas (MERCHANT) no contexto do mercado brasileiro.
+O **payment-service** é uma API REST que gerencia usuários, carteiras digitais e transferências financeiras entre pessoas físicas (COMMON) e lojistas (MERCHANT), seguindo os princípios de **Domain-Driven Design (DDD)** e **Event-Driven Architecture (EDA)**.
 
-A aplicação segue os princípios de Clean Architecture e DDD, com separação clara entre contextos de domínio, uso de Value Objects para encapsular regras de domínio, comunicação entre contextos via eventos Kafka, e criptografia de dados sensíveis em repouso.
+A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos de domínio, garantindo desacoplamento e escalabilidade. O fluxo de transferência implementa **lock pessimista determinístico**, **idempotência** e **retry com backoff** para garantir consistência em operações financeiras críticas.
 
 | | |
 |---|---|
 | **Linguagem** | Java 21 |
-| **Framework** | Spring Boot 3 |
-| **Banco de dados** | Relacional (JPA/Hibernate) |
-| **Mensageria** | Apache Kafka |
-| **Segurança** | AES-256-CBC com IV aleatório por registro |
+| **Framework** | Spring Boot 3.5 |
+| **Banco de dados** | PostgreSQL 16 |
+| **Mensageria** | Apache Kafka 7.5 |
+| **Segurança** | AES-256-CBC + BCrypt |
 | **Validação** | Bean Validation + Value Objects |
 | **Build** | Maven |
+| **Migrações** | Flyway |
 
 ---
 
-## 2. Estrutura de Contextos
+## 🏗️ Arquitetura
 
-A aplicação é organizada em contextos de domínio independentes. A comunicação entre contextos é feita exclusivamente via eventos Kafka ou contratos do `shared`.
+### Contextos de Domínio
 
 ```
 payment_service
-├── shared          ← contratos, infraestrutura e utilitários transversais
+├── shared          ← contratos, eventos, infraestrutura transversal
 ├── user            ← cadastro e gestão de usuários
-├── wallet          ← carteira digital e movimentações de saldo
+├── wallet          ← carteiras digitais e processamento de transferências
 ├── transfer        ← orquestração de transferências
-└── transaction     ← histórico imutável de movimentações
+└── transaction     ├── ledger imutável de movimentações
 ```
 
 ### Estrutura do `shared`
@@ -66,9 +67,7 @@ shared
 
 ---
 
-## 3. Módulo de Usuários
-
-Gerencia o ciclo de vida dos usuários na plataforma. O tipo de usuário é derivado automaticamente do documento informado no cadastro.
+## 👥 Módulo de Usuários
 
 ### Tipos de usuário
 
@@ -109,9 +108,7 @@ Gerencia o ciclo de vida dos usuários na plataforma. O tipo de usuário é deri
 
 ---
 
-## 4. Módulo de Carteira (Wallet)
-
-Cada usuário possui exatamente uma carteira, criada automaticamente ao consumir o `UserCreatedEvent`.
+## 💰 Módulo de Carteira (Wallet)
 
 ### Campos da entidade
 
@@ -139,12 +136,13 @@ Cada usuário possui exatamente uma carteira, criada automaticamente ao consumir
 | Direção | Evento | Tópico | Ação |
 |---|---|---|---|
 | Consome | `UserCreatedEvent` | `payment.users` | Cria a carteira |
+| Consome | `TransferCreatedEvent` | `payment.transfers` | Processa transferência |
 | Publica | `WalletDebitedEvent` | `payment.wallets` | Após débito |
 | Publica | `WalletCreditedEvent` | `payment.wallets` | Após crédito |
 
 ---
 
-## 5. Módulo de Transferência (Transfer)
+## 🔄 Módulo de Transferência (Transfer)
 
 Orquestra o fluxo completo de transferência entre usuários. Apenas `COMMON` pode enviar, apenas `MERCHANT` pode receber.
 
@@ -161,13 +159,31 @@ Orquestra o fluxo completo de transferência entre usuários. Apenas `COMMON` po
 
 ### Fluxo de execução
 
-| Etapa | Descrição |
-|---|---|
-| **1. Validação** | `AuthorizationService` verifica todas as regras antes de qualquer movimentação. |
-| **2. Persistência** | `TransferEntity` criada com status `PENDING`. |
-| **3. Débito** | `DebitWalletService` debita a carteira do remetente. |
-| **4. Crédito** | `CreditWalletService` credita a carteira do destinatário. |
-| **5. Conclusão** | Status atualizado para `COMPLETED` ou `FAILED`. |
+```
+1. POST /api/v1/transfers
+   → CreateTransferService.authorize()
+   → Cria TransferEntity com status PENDING
+   → Publica TransferCreatedEvent (Spring Event)
+
+2. TransferCreatedListener (após commit)
+   → TransferPublishService.publish()
+   → Publica TransferCreatedEvent no Kafka (retry 3x)
+
+3. TransferWalletConsumer (Kafka)
+   → ProcessTransferService.execute()
+   → Lock pessimista determinístico (menor UUID primeiro)
+   → Débito e crédito atômicos
+   → Publica WalletDebitedEvent e WalletCreditedEvent
+   → Marca transferência como processada (idempotência)
+
+4. TransferConsumer (Kafka)
+   → CreateTransactionService.executeDebit()
+   → CreateTransactionService.executeCredit()
+   → Publica TransferStatusChangedEvent (COMPLETED)
+
+5. TransferStatusConsumer (Kafka)
+   → Atualiza TransferEntity com status final (idempotência)
+```
 
 ### Endpoints
 
@@ -176,16 +192,16 @@ Orquestra o fluxo completo de transferência entre usuários. Apenas `COMMON` po
 | `POST` | `/api/v1/transfers` | Inicia uma transferência. |
 | `GET` | `/api/v1/transfers?walletId=` | Lista transferências da carteira (paginado, ordenado por `createdAt` DESC). |
 
-### Eventos consumidos e publicados
+### Eventos publicados e consumidos
 
 | Direção | Evento | Tópico | Ação |
 |---|---|---|---|
-| Publica | `TransferStatusChangedEvent` | `payment.transfers` | Ao criar e ao concluir |
-| Consome | `TransferStatusChangedEvent` | `payment.transfers` | Atualiza status da Transfer |
+| Publica | `TransferCreatedEvent` | `payment.transfers` | Ao criar transferência (via Kafka) |
+| Consome | `TransferStatusChangedEvent` | `payment.transfers` | Atualiza status final |
 
 ---
 
-## 6. Módulo de Autorização (Authorization)
+## 📒 Módulo de Autorização (Authorization)
 
 Serviço interno do contexto `transfer`. Valida todas as pré-condições antes de executar uma transferência. Consome apenas contratos de `shared` — sem acoplamento direto com `user` ou `wallet`.
 
@@ -202,7 +218,7 @@ Serviço interno do contexto `transfer`. Valida todas as pré-condições antes 
 
 ---
 
-## 7. Módulo de Transações (Transaction)
+## 📜 Módulo de Transações (Transaction)
 
 Ledger imutável de todas as movimentações de saldo. Alimentado via Kafka — nunca chamado diretamente pelo fluxo de transferência.
 
@@ -219,24 +235,25 @@ Ledger imutável de todas as movimentações de saldo. Alimentado via Kafka — 
 
 Cada transferência bem-sucedida gera exatamente duas `Transaction`: `DEBIT` no remetente e `CREDIT` no destinatário.
 
-### Eventos consumidos
+### Eventos consumidos e publicados
 
-| Evento | Tópico | Ação |
-|---|---|---|
-| `WalletDebitedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `DEBIT` |
-| `WalletCreditedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `CREDIT` |
+| Direção | Evento | Tópico | Ação |
+|---|---|---|---|
+| Consome | `WalletDebitedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `DEBIT` |
+| Consome | `WalletCreditedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `CREDIT` |
+| Publica | `TransferStatusChangedEvent` | `payment.transfers` | Ao completar ou falhar |
 
 ---
 
-## 8. Kafka
+## 🐙 Kafka
 
 ### Tópicos
 
 | Tópico | DLT | Produzido por | Consumido por |
 |---|---|---|---|
 | `payment.users` | `payment.users.DLT` | `CreateUserService` | `CreateWalletConsumer` |
-| `payment.wallets` | `payment.wallets.DLT` | `DebitWalletService`, `CreditWalletService` | `TransactionConsumer` |
-| `payment.transfers` | `payment.transfers.DLT` | `CreateTransferService` | `TransferStatusConsumer` |
+| `payment.wallets` | `payment.wallets.DLT` | `ProcessTransferService` | `TransferConsumer` |
+| `payment.transfers` | `payment.transfers.DLT` | `TransferPublishService`, `TransferConsumer` | `TransferWalletConsumer`, `TransferStatusConsumer` |
 
 ### Configuração de erros
 
@@ -244,9 +261,121 @@ Cada consumer está configurado com `DefaultErrorHandler` + `DeadLetterPublishin
 - 3 tentativas com intervalo de 1 segundo
 - Após esgotar tentativas, mensagem enviada ao DLT correspondente
 
+### Retry
+
+- `TransferPublishService`: 3 tentativas com backoff exponencial (1s, 2s, 4s)
+- `@Recover`: Publica status FAILED ao esgotar tentativas
+
 ---
 
-## 9. Decisões de Design
+## 🔒 Segurança e Consistência
+
+### Lock Pessimista Determinístico
+
+O `ProcessTransferService` implementa um algoritmo de lock determinístico para evitar deadlocks:
+
+```java
+// Sempre lock a carteira com menor UUID primeiro
+UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
+    ? sourceWalletId
+    : destinationWalletId;
+```
+
+**Benefícios:**
+- Garante ordem total de locks entre todas as transferências
+- Previne circular wait matematicamente
+- Permite concorrência em transferências não conflitantes
+
+### Idempotência
+
+| Contexto | Implementação |
+|---|---|
+| `wallet` | `ProcessedTransferRepository` - marca transferência como processada |
+| `transfer` | Verifica status antes de atualizar `TransferEntity` |
+| `transaction` | (Future) Verifica se já existe `TransactionEntity` com mesmo `transferId` e `type` |
+
+---
+
+## 🚀 Como Executar
+
+### Pré-requisitos
+
+- Java 21
+- Maven 3.8+
+- Docker e Docker Compose
+
+### Setup Local
+
+```bash
+# Clone o repositório
+git clone <repository-url>
+cd payment-service
+
+# Configure a secret de criptografia
+export APP_CRYPTO_SECRET="your-secret-key-32-characters"
+
+# Inicie os serviços (PostgreSQL, Kafka, Payment Service)
+docker-compose up -d
+
+# Verifique os logs
+docker-compose logs -f payment-service
+
+# A aplicação estará disponível em http://localhost:8080
+```
+
+### Executar Testes
+
+```bash
+# Executar todos os testes
+mvn test
+
+# Executar com cobertura
+mvn test jacoco:report
+```
+
+### Build e Deploy
+
+```bash
+# Build JAR
+mvn clean package
+
+# Build Docker image
+docker build -t payment-service:latest .
+
+# Push para registry
+docker tag payment-service:latest <registry>/payment-service:latest
+docker push <registry>/payment-service:latest
+```
+
+---
+
+## 📊 Monitoramento
+
+### Health Check
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+### Metrics
+
+```bash
+curl http://localhost:8080/actuator/metrics
+```
+
+### Kafka Topics
+
+```bash
+# Listar tópicos
+docker exec -it payment-kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+# Consumir mensagens de um tópico
+docker exec -it payment-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic payment.transfers --from-beginning
+```
+
+---
+
+## 🎯 Decisões de Design
 
 | Decisão | Justificativa |
 |---|---|
@@ -259,4 +388,54 @@ Cada consumer está configurado com `DefaultErrorHandler` + `DeadLetterPublishin
 | `shared.query` com interfaces | `AuthorizationService` depende de interfaces, não de implementações de outros contextos. |
 | `UserSummary` e `WalletSummary` em `shared` | Contratos de leitura transversais sem vazar entidades entre contextos. |
 | `TransferStatus` em `shared.type` | Usado em eventos e em múltiplos contextos — sem dono único. |
+| Lock pessimista determinístico | Previne deadlocks ao garantir ordem total de locks entre carteiras. |
+| Spring Events + Kafka | Spring Events para comunicação síncrona intra-contexto, Kafka para comunicação assíncrona inter-contexto. |
+| Retry com backoff | 3 tentativas com delay progressivo (1s, 2s, 4s) para lidar com falhas transitórias. |
 | DLT por tópico | Mensagens com falha são isoladas sem bloquear o consumo do tópico principal. |
+
+---
+
+## 📝 API Examples
+
+### Criar Usuário
+
+```bash
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "João Silva",
+    "email": "joao@example.com",
+    "password": "SecurePass123!",
+    "document": "12345678901"
+  }'
+```
+
+### Criar Transferência
+
+```bash
+curl -X POST http://localhost:8080/api/v1/transfers \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceWalletId": "<source-wallet-uuid>",
+    "destinationWalletId": "<dest-wallet-uuid>",
+    "amount": 100.50
+  }'
+```
+
+### Listar Transferências
+
+```bash
+curl "http://localhost:8080/api/v1/transfers?walletId=<wallet-uuid>&page=0&size=20"
+```
+
+### Consultar Saldo
+
+```bash
+curl http://localhost:8080/api/v1/wallets/<user-uuid>
+```
+
+---
+
+## 📄 Licença
+
+Este projeto está sob licença [MIT](LICENSE).

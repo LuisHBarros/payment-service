@@ -37,8 +37,8 @@ public class TransferAuthorizationService {
         if (!receiver.canReceive()) {
             throw new UnauthorizedTransferException("only MERCHANT users can receive transfers");
         }
-        if (sourceWallet.balance().compareTo(amount) < 0) {
-            throw new UnauthorizedTransferException("insufficient balance");
-        }
+        // if (sourceWallet.balance().compareTo(amount) < 0) {
+        //     throw new UnauthorizedTransferException("insufficient balance");
+        // }
     }
 }

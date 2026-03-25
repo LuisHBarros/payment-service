@@ -10,6 +10,7 @@ import com.payment.payment_service.transfer.entity.TransferEntity;
 import com.payment.payment_service.transfer.exception.TransferNotFoundException;
 import com.payment.payment_service.transfer.repository.TransferRepository;
 
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -18,12 +19,12 @@ public class GetTransferService {
 
     private final TransferRepository transferRepository;
 
-    public TransferEntity execute(UUID id) {
+    public TransferEntity execute(@NonNull UUID id) {
         return transferRepository.findById(id)
             .orElseThrow(() -> new TransferNotFoundException("transfer not found"));
     }
 
-    public Page<TransferEntity> findByWalletId(UUID walletId, Pageable pageable) {
+    public Page<TransferEntity> findByWalletId(@NonNull UUID walletId, Pageable pageable) {
         return transferRepository.findBySourceWalletIdOrDestinationWalletId(walletId, walletId, pageable);
     }
 }

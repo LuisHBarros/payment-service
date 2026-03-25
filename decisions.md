@@ -1,96 +1,361 @@
-# Decisões Pendentes
+# Decisões Técnicas
 
-Registro de decisões técnicas identificadas durante o desenvolvimento, ainda não implementadas.
+Registro de decisões técnicas tomadas durante o desenvolvimento do payment-service, incluindo implementações concluídas e melhorias futuras.
 
 ---
 
-## 1. Migrar chamada direta `CreateUserService → CreateWalletService` para Kafka
+## ✅ Decisões Implementadas
 
-### Contexto
+### 1. Comunicação entre Contextos via Kafka
 
-`User` e `Wallet` são contextos distintos. Atualmente o `CreateUserService` chama o `CreateWalletService` diretamente, criando acoplamento entre contextos. A infraestrutura Kafka já está implementada na aplicação.
+**Status:** ✅ Implementado (2025)
 
-### Problema
+**Contexto:**
+Inicialmente, o projeto tinha chamadas diretas entre contextos (`User → Wallet`, `Transfer → Wallet`), violando o princípio de isolamento do DDD.
 
-Chamada direta entre contextos viola o princípio de isolamento do DDD. O contexto de `User` não deveria conhecer o contexto de `Wallet`.
+**Decisão:**
+Substituir todas as chamadas diretas por eventos Kafka para garantir desacoplamento completo entre contextos de domínio.
 
-### Decisão pendente
+**Implementação:**
+- `CreateUserService` publica `UserCreatedEvent` no tópico `payment.users`
+- `CreateWalletConsumer` consome `UserCreatedEvent` e cria a carteira
+- `CreateTransferService` publica `TransferCreatedEvent` no tópico `payment.transfers`
+- `TransferWalletConsumer` consome `TransferCreatedEvent` e processa a transferência
+- `ProcessTransferService` publica `WalletDebitedEvent` e `WalletCreditedEvent` no tópico `payment.wallets`
 
-Substituir a chamada direta pela publicação do `UserCreatedEvent` no tópico `payment.users`. O `CreateWalletConsumer` já está implementado e pronto para consumir o evento.
+**Benefícios:**
+- Desacoplamento total entre contextos
+- Escalabilidade independente por contexto
+- Resiliência via retry e DLT
+- Auditoria via logs de eventos
 
-### Mudança necessária
+---
 
-**`CreateUserService`** — substituir:
+### 2. Lock Pessimista Determinístico
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+Com a migração para eventos assíncronos, era necessário evitar race conditions e deadlocks em transferências concorrentes.
+
+**Decisão:**
+Implementar lock pessimista com ordenação determinística para garantir exclusão mútua e prevenir deadlocks.
+
+**Implementação:**
 ```java
-// ❌ hoje
-createWalletService.execute(user.getId());
-
-// ✅ após a mudança
-kafkaEventProducer.publishUserCreated(new UserCreatedEvent(user.getId()));
+// WalletRepository.java
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+@Query("select w from WalletEntity w where w.id = :id")
+Optional<WalletEntity> findByIdForUpdate(UUID id);
 ```
-
-O `CreateWalletConsumer` já consome `payment.users` e chama `CreateWalletService.execute()` — nenhuma outra mudança necessária.
-
----
-
-## 2. Migrar chamadas diretas de `DebitWalletService` e `CreditWalletService` para eventos
-
-### Contexto
-
-O `CreateTransferService` chama `DebitWalletService` e `CreditWalletService` diretamente, acoplando o contexto de `Transfer` ao de `Wallet`.
-
-### Problema
-
-Chamada direta entre contextos distintos viola o isolamento do DDD. Além disso, impede que o fluxo de transferência seja assíncrono.
-
-### Decisão pendente
-
-Substituir as chamadas diretas por eventos Kafka. O fluxo completo ficaria:
-
-```
-CreateTransferService
-  → publica TransferStatusChangedEvent (PENDING)
-  → publica WalletDebitedEvent
-  → publica WalletCreditedEvent
-    → TransactionConsumer persiste DEBIT e CREDIT
-      → publica TransferStatusChangedEvent (COMPLETED ou FAILED)
-        → TransferStatusConsumer atualiza status
-```
-
-### Observação
-
-Ao migrar, garantir idempotência nos consumers — reprocessamento de `WalletDebitedEvent` ou `WalletCreditedEvent` não deve gerar movimentações duplicadas. Sugestão: verificar se já existe `TransactionEntity` com o mesmo `transferId` e `type` antes de persistir.
-
----
-
-## 3. Lock otimista na `WalletEntity` após migração para eventos assíncronos
-
-### Contexto
-
-Atualmente `AuthorizationService` e `DebitWalletService` validam saldo suficiente em duas camadas — intencional para proteger contra race conditions quando os eventos forem assíncronos.
-
-### Decisão pendente
-
-Após migrar para eventos assíncronos (item 2), revisar se a validação dupla é suficiente ou se é necessário introduzir **lock otimista** na `WalletEntity`:
 
 ```java
-@Version
-private Long version;
+// ProcessTransferService.java
+// Sempre lock a carteira com menor UUID primeiro
+UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
+    ? sourceWalletId
+    : destinationWalletId;
 ```
 
-O `@Version` do JPA garante que duas transações concorrentes não debitam o mesmo saldo sem conflito explícito.
+**Benefícios:**
+- Prevenção matemática de deadlocks (ordem total de locks)
+- Proteção contra race conditions em saldos
+- Permite concorrência em transferências não conflitantes
+- Simplicidade do algoritmo (comparação de UUIDs)
 
 ---
 
-## 4. Filtros adicionais em `GET /transfers`
+### 3. Idempotência em Processamento de Transferências
 
-### Contexto
+**Status:** ✅ Implementado (2025)
 
-O endpoint `GET /api/v1/transfers?walletId=` foi implementado com paginação por `createdAt` descendente.
+**Contexto:**
+Com retry e reprocessamento de mensagens Kafka, era essencial evitar processamento duplicado de transferências.
 
-### Decisão pendente
+**Decisão:**
+Implementar idempotência via `ProcessedTransferRepository` para garantir que cada transferência seja processada apenas uma vez.
 
-Avaliar a necessidade de filtros adicionais no futuro:
+**Implementação:**
+```java
+// ProcessTransferService.java
+if (processedTransferRepository.existsById(transferId)) {
+    log.info("Transfer {} already processed, skipping", transferId);
+    return;
+}
+// ... processa transferência
+var processedTransfer = new ProcessedTransferEntity();
+processedTransfer.setId(transferId);
+processedTransferRepository.save(processedTransfer);
+```
+
+**Benefícios:**
+- Segurança contra reprocessamento duplicado
+- Retries transparentes sem efeitos colaterais
+- Garantia de exatamente-uma-vez em transferências bem-sucedidas
+
+---
+
+### 4. Idempotência em Atualizações de Status
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+Consumidores de `TransferStatusChangedEvent` poderiam receber eventos duplicados, causando atualizações redundantes.
+
+**Decisão:**
+Verificar status antes de atualizar `TransferEntity` para garantir idempotência.
+
+**Implementação:**
+```java
+// TransferStatusConsumer.java
+if (transfer.getStatus() != event.status()) {
+    transfer.setStatus(event.status());
+    transferRepository.save(transfer);
+    log.info("Updated transfer status to {} for transferId={}",
+             event.status(), event.transferId());
+} else {
+    log.info("Transfer status already {} for transferId={}, skipping update",
+             event.status(), event.transferId());
+}
+```
+
+**Benefícios:**
+- Evita atualizações redundantes no banco
+- Logs claros de quando updates são ignorados
+- Suporte natural a reprocessamento de mensagens
+
+---
+
+### 5. Retry com Backoff Exponencial
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+Falhas transitórias (Kafka unavailable, timeout) poderiam causar falha de transferência permanentemente.
+
+**Decisão:**
+Implementar retry com backoff exponencial para lidar com falhas transitórias.
+
+**Implementação:**
+```java
+// TransferPublishService.java
+@Retryable(
+    retryFor = {Exception.class},
+    maxAttempts = 3,
+    backoff = @Backoff(delay = 1000, multiplier = 2)
+)
+public void publish(TransferCreatedEvent event) {
+    kafkaEventProducer.publishTransferCreated(event);
+}
+
+@Recover
+public void recover(Exception e, TransferCreatedEvent event) {
+    transferStatusUpdateService.execute(event.transferId(), TransferStatus.FAILED);
+}
+```
+
+**Benefícios:**
+- Resiliência a falhas transitórias
+- Delays progressivos para dar tempo de recuperação
+- Fallback para status FAILED ao esgotar tentativas
+
+---
+
+### 6. Arquitetura Híbrida: Spring Events + Kafka
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+Precisava garantir que eventos fossem publicados apenas após commit da transação, mas também wanted comunicação assíncrona entre contextos.
+
+**Decisão:**
+Usar Spring Events para comunicação síncrona intra-contexto (após commit) e Kafka para comunicação assíncrona inter-contexto.
+
+**Implementação:**
+```java
+// CreateTransferService.java
+@Transactional
+public UUID execute(...) {
+    // ... cria transferência
+    eventPublisher.publishEvent(new TransferCreatedEvent(...)); // Spring Event
+}
+
+// TransferCreatedListener.java
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void handle(TransferCreatedEvent event) {
+    transferPublishService.publish(event); // Kafka
+}
+```
+
+**Benefícios:**
+- Eventos publicados apenas após commit consistente
+- Desacoplamento entre contextos
+- Flexibilidade para diferentes padrões de comunicação
+- Garantia de atomicidade na publicação de eventos locais
+
+---
+
+### 7. Remoção de Serviços Diretos de Wallet
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+`CreditWalletService` e `DebitWalletService` eram chamados diretamente pelo contexto `Transfer`, criando acoplamento forte.
+
+**Decisão:**
+Remover serviços diretos e substituir por fluxo baseado em eventos via `ProcessTransferService`.
+
+**Implementação:**
+- Removido: `CreditWalletService.java`, `DebitWalletService.java`
+- Adicionado: `ProcessTransferService.java` (processa débito e crédito atômicos)
+- Comunicação: `TransferCreatedEvent` → `TransferWalletConsumer` → `ProcessTransferService`
+
+**Benefícios:**
+- Desacoplamento completo entre `Transfer` e `Wallet`
+- Processamento atômico de débito e crédito
+- Simplificação do fluxo (um serviço para ambos)
+- Publicação consistente de eventos
+
+---
+
+### 8. Dead Letter Topics (DLT)
+
+**Status:** ✅ Implementado (2025)
+
+**Contexto:**
+Mensagens com falha permanente bloqueavam o consumo do tópico principal.
+
+**Decisão:**
+Configurar DLT para cada tópico Kafka, permitindo que mensagens com falha sejam isoladas sem bloquear o fluxo principal.
+
+**Implementação:**
+- `payment.users.DLT` para falhas em `payment.users`
+- `payment.wallets.DLT` para falhas em `payment.wallets`
+- `payment.transfers.DLT` para falhas em `payment.transfers`
+- Configuração via `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`
+
+**Benefícios:**
+- Isolamento de mensagens com falha
+- Possibilidade de reprocessamento manual
+- Monitoramento de erros via DLT
+- Continuidade do fluxo principal
+
+---
+
+## ⏳ Decisões Pendentes
+
+### 1. Idempotência em Transações
+
+**Status:** ⏸️ Pendente
+
+**Contexto:**
+O `TransactionConsumer` cria `TransactionEntity` baseado em eventos de wallet, mas não verifica se a transação já existe.
+
+**Decisão pendente:**
+Implementar verificação de unicidade antes de criar transação para garantir idempotência.
+
+**Mudança necessária:**
+
+```java
+// CreateTransactionService.java
+@Transactional
+public void executeDebit(UUID walletId, UUID transferId, BigDecimal amount) {
+    // Adicionar verificação de idempotência
+    if (transactionRepository.existsByWalletIdAndTransferIdAndType(
+            walletId, transferId, TransactionType.DEBIT)) {
+        log.info("Transaction DEBIT already exists for walletId={} transferId={}",
+                 walletId, transferId);
+        return;
+    }
+    // ... cria transação
+}
+```
+
+**Considerações:**
+- Necessário adicionar índice único em `(walletId, transferId, type)` no banco
+- Garante que reprocessamento de eventos não crie transações duplicadas
+- Consistente com idempotência implementada em outros contextos
+
+---
+
+### 2. Filtros Adicionais em `GET /transfers`
+
+**Status:** ⏸️ Pendente
+
+**Contexto:**
+O endpoint `GET /api/v1/transfers?walletId=` foi implementado com paginação por `createdAt` descendente, mas sem filtros adicionais.
+
+**Decisão pendente:**
+Avaliar e implementar filtros adicionais baseados em requisitos de negócio.
+
+**Possíveis filtros:**
 - Por período (`startDate`, `endDate`)
 - Por status (`COMPLETED`, `FAILED`, `PENDING`)
 - Por tipo (`DEBIT`, `CREDIT`)
+
+**Considerações:**
+- Requisitos dependem de casos de uso reais
+- Índices adicionais podem ser necessários no banco
+- Performance deve ser considerada para tabelas grandes
+
+---
+
+### 3. Endpoints de Consulta ao Ledger de Transações
+
+**Status:** ⏸️ Pendente
+
+**Contexto:**
+O módulo `transaction` persiste o ledger de movimentações, mas não expõe endpoints de consulta.
+
+**Decisão pendente:**
+Implementar endpoints para consulta do histórico de transações.
+
+**Possíveis endpoints:**
+- `GET /api/v1/transactions?walletId=` - Listar transações da carteira
+- `GET /api/v1/transactions/{id}` - Detalhe de uma transação
+- `GET /api/v1/transactions?transferId=` - Todas as transações de uma transferência
+
+**Considerações:**
+- Transações são imutáveis, então cache é viável
+- Paginação é essencial (tabelas podem ser grandes)
+- Filtros por período e tipo podem ser úteis
+
+---
+
+## 🔄 Decisões Consideradas (Não Implementadas)
+
+### Lock Otimista em `WalletEntity`
+
+**Status:** ❌ Descartado em favor de Lock Pessimista
+
+**Contexto:**
+Inicialmente foi considerado lock otimista via `@Version` para evitar conflitos.
+
+**Motivo da descarte:**
+- Lock pessimista determinístico foi implementado como solução mais robusta
+- Garante exclusão mútua durante a transferência completa
+- Simples e matematicamente correto (ordem total de locks)
+- Lock otimista ainda pode ser adicionado como camada adicional se necessário
+
+---
+
+## 📊 Resumo de Evolução
+
+| Mês | Mudança Principal | Impacto |
+|---|---|---|
+| 2025-01 | Implementação base com DDD | Contextos isolados, value objects |
+| 2025-02 | Migração para Kafka | Desacoplamento completo entre contextos |
+| 2025-03 | Lock pessimista + idempotência | Consistência em transferências concorrentes |
+| 2025-03 | Retry + DLT | Resiliência em cenários de falha |
+
+---
+
+## 🎯 Princípios Arquiteturais
+
+As decisões tomadas seguem consistentemente os seguintes princípios:
+
+1. **Desacoplamento:** Contextos comunicam-se apenas via eventos, sem dependências diretas
+2. **Consistência:** Locks determinísticos e idempotência garantem integridade financeira
+3. **Resiliência:** Retry, DLT e idempotência lidam com falhas gracefully
+4. **Auditoria:** Ledger de transações imutável para traceabilidade completa
+5. **Escalabilidade:** Arquitetura assíncrona permite escala independente por contexto

@@ -2,8 +2,8 @@ package com.payment.payment_service.user.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
-
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,6 +22,7 @@ import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.user.value_object.Email;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class DeleteUserServiceTest {
 
     @Mock
@@ -50,18 +51,14 @@ class DeleteUserServiceTest {
 
     @Test
     void execute_WithExistingUser_ShouldSoftDeleteUser() {
-        // Arrange
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(UserEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // Act
         deleteUserService.execute(testUserId);
 
-        // Assert
         verify(userRepository).findById(testUserId);
-        verify(userRepository).save(argThat(user ->
-            user.getActive() != null && !user.getActive()
-        ));
+        verify(userRepository).save(argThat(user -> !user.isActive()));
     }
 
     @Test
@@ -83,28 +80,27 @@ class DeleteUserServiceTest {
     void execute_ShouldSetActiveToFalse() {
         // Arrange
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, UserEntity.class));
 
         // Act
         deleteUserService.execute(testUserId);
 
         // Assert
-        verify(userRepository).save(argThat(user ->
-            !user.getActive()
-        ));
+        verify(userRepository).save(argThat(user -> !user.isActive()));
     }
 
     @Test
     void execute_ShouldPreserveOtherUserFields() {
         // Arrange
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, UserEntity.class));
 
         // Act
         deleteUserService.execute(testUserId);
 
         // Assert
         verify(userRepository).save(argThat(user ->
+            user != null &&
             testUserId.equals(user.getId()) &&
             "John Doe".equals(user.getName()) &&
             "john.doe@example.com".equals(user.getEmail().value()) &&
@@ -133,15 +129,13 @@ class DeleteUserServiceTest {
         // Arrange
         testUser.setActive(false);
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, UserEntity.class));
 
         // Act
         deleteUserService.execute(testUserId);
 
         // Assert
-        verify(userRepository).save(argThat(user ->
-            !user.getActive()
-        ));
+        verify(userRepository).save(argThat(user -> !user.isActive()));
     }
 
     @Test

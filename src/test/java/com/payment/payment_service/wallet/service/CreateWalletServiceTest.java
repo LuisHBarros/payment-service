@@ -19,6 +19,7 @@ import com.payment.payment_service.wallet.exception.WalletAlreadyExistsException
 import com.payment.payment_service.wallet.repository.WalletRepository;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class CreateWalletServiceTest {
 
     @Mock

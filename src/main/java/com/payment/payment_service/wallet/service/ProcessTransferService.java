@@ -8,9 +8,12 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment.payment_service.shared.entity.OutboxEntity;
 import com.payment.payment_service.shared.event.WalletCreditedEvent;
 import com.payment.payment_service.shared.event.WalletDebitedEvent;
-import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.payment.payment_service.shared.repository.OutboxRepository;
 import com.payment.payment_service.wallet.entity.ProcessedTransferEntity;
 import com.payment.payment_service.wallet.entity.WalletEntity;
 import com.payment.payment_service.wallet.exception.InsufficientBalanceException;
@@ -28,23 +31,9 @@ public class ProcessTransferService {
 
     private final WalletRepository walletRepository;
     private final ProcessedTransferRepository processedTransferRepository;
-    private final KafkaEventProducer kafkaEventProducer;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
-    /**
-     * Executes a transfer with deterministic lock ordering to prevent deadlocks.
-     *
-     * Lock ordering strategy:
-     * - Always lock the wallet with the smaller UUID first
-     * - This creates a total order across all wallets, preventing circular wait
-     * - Mathematically guarantees deadlock prevention
-     *
-     * @param transferId the unique identifier of the transfer
-     * @param sourceWalletId the wallet to debit from
-     * @param destinationWalletId the wallet to credit to
-     * @param amount the transfer amount (must be positive)
-     * @throws InsufficientBalanceException if source wallet has insufficient balance
-     * @throws WalletNotFoundException if either wallet does not exist
-     */
     @Transactional
     public void execute(UUID transferId, UUID sourceWalletId, UUID destinationWalletId, BigDecimal amount) {
         Objects.requireNonNull(transferId, "transferId");
@@ -100,25 +89,12 @@ public class ProcessTransferService {
         processedTransferRepository.save(processedTransfer);
 
         // Publish events to transaction context
-        kafkaEventProducer.publishWalletDebited(
-            new WalletDebitedEvent(sourceWalletId, transferId, amount)
-        );
-
-        kafkaEventProducer.publishWalletCredited(
-            new WalletCreditedEvent(destinationWalletId, transferId, amount)
-        );
+        saveOutbox("WALLET_DEBITED", transferId, new WalletDebitedEvent(sourceWalletId, transferId, amount));
+        saveOutbox("WALLET_CREDITED", transferId, new WalletCreditedEvent(destinationWalletId, transferId, amount));
 
         log.info("Successfully processed transfer transferId={}", transferId);
     }
 
-    /**
-     * Performs debit operation on a wallet.
-     *
-     * @param wallet the wallet to debit
-     * @param amount the amount to debit
-     * @param transferId the transfer identifier for logging
-     * @throws InsufficientBalanceException if wallet has insufficient balance
-     */
     private void performDebit(WalletEntity wallet, BigDecimal amount, UUID transferId) {
         log.debug("Debiting wallet={} amount={} transferId={}", wallet.getId(), amount, transferId);
 
@@ -132,15 +108,22 @@ public class ProcessTransferService {
         wallet.setBalance(wallet.getBalance().subtract(amount));
     }
 
-    /**
-     * Performs credit operation on a wallet.
-     *
-     * @param wallet the wallet to credit
-     * @param amount the amount to credit
-     * @param transferId the transfer identifier for logging
-     */
     private void performCredit(WalletEntity wallet, BigDecimal amount, UUID transferId) {
         log.debug("Crediting wallet={} amount={} transferId={}", wallet.getId(), amount, transferId);
         wallet.setBalance(wallet.getBalance().add(amount));
+    }
+    
+    private void saveOutbox(String eventType, UUID aggregateId, Object event) {
+        try {
+            OutboxEntity outboxEntity = new OutboxEntity();
+            outboxEntity.setAggregateType("wallet");
+            outboxEntity.setEventType(eventType);
+            outboxEntity.setAggregateId(aggregateId);
+            outboxEntity.setPayload(objectMapper.writeValueAsString(event));
+            outboxRepository.save(outboxEntity);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize outbox event", e);
+            throw new RuntimeException("Failed to serialize outbox event", e);
+        }
     }
 }

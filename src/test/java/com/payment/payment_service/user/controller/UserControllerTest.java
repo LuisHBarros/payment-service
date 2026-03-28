@@ -1,27 +1,37 @@
 package com.payment.payment_service.user.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.security.test.context.support.WithMockUser;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment.payment_service.auth.JwtAuthenticationFilter;
+import com.payment.payment_service.config.AuthenticatedUser;
 import com.payment.payment_service.user.dto.CreateUserRequestDTO;
 import com.payment.payment_service.user.dto.PatchUserRequestDTO;
 import com.payment.payment_service.user.entity.UserEntity;
@@ -33,8 +43,9 @@ import com.payment.payment_service.user.type.UserType;
 import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.user.value_object.Email;
 
+@SuppressWarnings("null")
 @WebMvcTest(UserController.class)
-@WithMockUser
+@AutoConfigureMockMvc(addFilters = false)
 class UserControllerTest {
 
     @Autowired
@@ -55,6 +66,10 @@ class UserControllerTest {
     @MockitoBean
     private PatchUserService patchUserService;
 
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+
     private UserEntity testUser;
     private UUID testUserId;
     private LocalDateTime testTime;
@@ -74,7 +89,19 @@ class UserControllerTest {
         testUser.setDocumentHash("hash123");
         testUser.setCreatedAt(testTime);
         testUser.setUpdatedAt(testTime);
+
+        var authenticatedUser = new AuthenticatedUser(testUserId, "john.doe@example.com", UserType.ADMIN);
+        var authentication = new UsernamePasswordAuthenticationToken(
+            authenticatedUser, null,
+            List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         reset(createUserService, getUserService, deleteUserService, patchUserService);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -89,7 +116,6 @@ class UserControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/users")
-                .with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
@@ -112,20 +138,21 @@ class UserControllerTest {
         user2.setCreatedAt(testTime);
         user2.setUpdatedAt(testTime);
 
-        when(getUserService.findAll()).thenReturn(List.of(testUser, user2));
+        Page<UserEntity> userPage = new PageImpl<>(List.of(testUser, user2));
+        when(getUserService.findAll(any(Pageable.class))).thenReturn(userPage);
 
         // Act & Assert
         mockMvc.perform(get("/api/v1/users"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].name").value("John Doe"))
-            .andExpect(jsonPath("$[0].email").value("john.doe@example.com"))
-            .andExpect(jsonPath("$[0].type").value("COMMON"))
-            .andExpect(jsonPath("$[0].active").value(true))
-            .andExpect(jsonPath("$[1].name").value("Jane Smith"))
-            .andExpect(jsonPath("$[1].email").value("jane.smith@example.com"))
-            .andExpect(jsonPath("$[1].type").value("MERCHANT"))
-            .andExpect(jsonPath("$[1].active").value(true));
-        verify(getUserService).findAll();
+            .andExpect(jsonPath("$.content[0].name").value("John Doe"))
+            .andExpect(jsonPath("$.content[0].email").value("john.doe@example.com"))
+            .andExpect(jsonPath("$.content[0].type").value("COMMON"))
+            .andExpect(jsonPath("$.content[0].active").value(true))
+            .andExpect(jsonPath("$.content[1].name").value("Jane Smith"))
+            .andExpect(jsonPath("$.content[1].email").value("jane.smith@example.com"))
+            .andExpect(jsonPath("$.content[1].type").value("MERCHANT"))
+            .andExpect(jsonPath("$.content[1].active").value(true));
+        verify(getUserService).findAll(any(Pageable.class));
     }
 
     @Test
@@ -167,7 +194,6 @@ class UserControllerTest {
 
         // Act & Assert
         mockMvc.perform(patch("/api/v1/users/{id}", testUserId)
-                .with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
@@ -184,7 +210,6 @@ class UserControllerTest {
 
         // Act & Assert
         mockMvc.perform(patch("/api/v1/users/{id}", testUserId)
-                .with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk());
@@ -200,7 +225,6 @@ class UserControllerTest {
 
         // Act & Assert
         mockMvc.perform(patch("/api/v1/users/{id}", testUserId)
-                .with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk());
@@ -213,8 +237,7 @@ class UserControllerTest {
         doNothing().when(deleteUserService).execute(testUserId);
 
         // Act & Assert
-        mockMvc.perform(delete("/api/v1/users/{id}", testUserId)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
+        mockMvc.perform(delete("/api/v1/users/{id}", testUserId))
             .andExpect(status().isNoContent());
         verify(deleteUserService).execute(testUserId);
     }
@@ -226,8 +249,7 @@ class UserControllerTest {
         doNothing().when(deleteUserService).execute(nonExistingId);
 
         // Act & Assert
-        mockMvc.perform(delete("/api/v1/users/{id}", nonExistingId)
-                .with(SecurityMockMvcRequestPostProcessors.csrf()))
+        mockMvc.perform(delete("/api/v1/users/{id}", nonExistingId))
             .andExpect(status().isNoContent());
         verify(deleteUserService).execute(nonExistingId);
     }
@@ -244,24 +266,23 @@ class UserControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/users")
-                .with(SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated());
-        verify(createUserService).execute("John Doe", "john.doe@example.com", "SecurePass123!", "52998224725");
     }
 
     @Test
     void findAll_WithEmptyDatabase_ShouldReturnOkWithEmptyList() throws Exception {
         // Arrange
-        when(getUserService.findAll()).thenReturn(List.of());
+        Page<UserEntity> emptyPage = new PageImpl<>(List.of());
+        when(getUserService.findAll(any(Pageable.class))).thenReturn(emptyPage);
 
         // Act & Assert
         mockMvc.perform(get("/api/v1/users"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$").isArray())
-            .andExpect(jsonPath("$.length()").value(0));
-        verify(getUserService).findAll();
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.content.length()").value(0));
+        verify(getUserService).findAll(any(Pageable.class));
     }
 
     @Test

@@ -39,7 +39,7 @@ public class UserEntity extends BaseEntity {
     private UserType type;
 
     @Column(nullable = false)
-    private Boolean active = true;
+    private boolean active = true;
 
     @Convert(converter = DocumentConverter.class)
     @Column(nullable = false)

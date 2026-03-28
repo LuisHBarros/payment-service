@@ -13,6 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import com.payment.payment_service.user.entity.UserEntity;
 import com.payment.payment_service.user.exceptions.UserNotFoundException;
@@ -22,6 +25,7 @@ import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.user.value_object.Email;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class GetUserServiceTest {
 
     @Mock
@@ -91,31 +95,33 @@ class GetUserServiceTest {
         user2.setDocumentHash("hash456");
 
         List<UserEntity> expectedUsers = List.of(testUser, user2);
-        when(userRepository.findAll()).thenReturn(expectedUsers);
+        when(userRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(expectedUsers));
 
         // Act
-        List<UserEntity> result = getUserService.findAll();
+        Pageable pageable = Pageable.unpaged();
+        Page<UserEntity> result = getUserService.findAll(pageable);
 
         // Assert
         assertNotNull(result);
-        assertEquals(2, result.size());
-        assertEquals("John Doe", result.get(0).getName());
-        assertEquals("Jane Smith", result.get(1).getName());
-        verify(userRepository).findAll();
+        assertEquals(2, result.getNumberOfElements());
+        assertEquals("John Doe", result.getContent().get(0).getName());
+        assertEquals("Jane Smith", result.getContent().get(1).getName());
+        verify(userRepository).findAll(any(Pageable.class));
     }
 
     @Test
     void findAll_WithEmptyDatabase_ShouldReturnEmptyList() {
         // Arrange
-        when(userRepository.findAll()).thenReturn(List.of());
+        when(userRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
         // Act
-        List<UserEntity> result = getUserService.findAll();
+        Pageable pageable = Pageable.unpaged();
+        Page<UserEntity> result = getUserService.findAll(pageable);
 
         // Assert
         assertNotNull(result);
         assertTrue(result.isEmpty());
-        verify(userRepository).findAll();
+        verify(userRepository).findAll(any(Pageable.class));
     }
 
     @Test
@@ -133,7 +139,7 @@ class GetUserServiceTest {
         assertNotNull(result.getEmail());
         assertNotNull(result.getPassword());
         assertNotNull(result.getType());
-        assertNotNull(result.getActive());
+        assertNotNull(result.isActive());
         assertNotNull(result.getDocument());
         assertNotNull(result.getDocumentHash());
         verify(userRepository).findById(testUserId);

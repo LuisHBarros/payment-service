@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import com.payment.payment_service.shared.dto.UserSummary;
 import com.payment.payment_service.shared.query.UserQueryService;
+import com.payment.payment_service.user.entity.UserEntity;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,7 +18,7 @@ public class UserQueryServiceImpl implements UserQueryService {
 
     @Override
     public UserSummary getSummary(UUID id) {
-        var user = getUserService.findById(id);
-        return new UserSummary(user.getId(), user.getType(), user.getActive());
+        UserEntity user = getUserService.findById(id);
+        return new UserSummary(user.getId(), user.getType(), user.isActive());
     }
 }

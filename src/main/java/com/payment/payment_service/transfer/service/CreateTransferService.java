@@ -3,10 +3,13 @@ package com.payment.payment_service.transfer.service;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment.payment_service.shared.entity.OutboxEntity;
+import com.payment.payment_service.shared.repository.OutboxRepository;
 import com.payment.payment_service.shared.type.TransferStatus;
 import com.payment.payment_service.transfer.entity.TransferEntity;
 import com.payment.payment_service.transfer.event.TransferCreatedEvent;
@@ -23,7 +26,8 @@ public class CreateTransferService {
 
     private final TransferRepository transferRepository;
     private final TransferAuthorizationService transferAuthorizationService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public UUID execute(UUID sourceWalletId, UUID destinationWalletId, BigDecimal amount) {
@@ -41,16 +45,29 @@ public class CreateTransferService {
         transfer.setAmount(amount);
         transfer.setStatus(TransferStatus.PENDING);
         transferRepository.save(transfer);
-
+        
         // Publicar evento após commit da transação
-        eventPublisher.publishEvent(
-            new TransferCreatedEvent(
-                transfer.getId(),
-                transfer.getSourceWalletId(),
-                transfer.getDestinationWalletId(),
-                transfer.getAmount()
-            )
+        var event = new TransferCreatedEvent(
+            transfer.getId(),
+            transfer.getSourceWalletId(),
+            transfer.getDestinationWalletId(),
+            transfer.getAmount()
         );
+        saveOutbox("TRANSFER_CREATED", transfer.getId(), event);
         return transfer.getId();
+    }
+    
+    private void saveOutbox(String eventType, UUID aggregateId, Object event) {
+        try {
+            var outbox = new OutboxEntity();
+            outbox.setAggregateId(aggregateId);
+            outbox.setAggregateType("transfer");
+            outbox.setEventType(eventType);
+            outbox.setPayload(objectMapper.writeValueAsString(event));
+            outboxRepository.save(outbox);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize transfer event", e);
+            throw new RuntimeException("Failed to serialize transfer event", e);
+        }
     }
 }

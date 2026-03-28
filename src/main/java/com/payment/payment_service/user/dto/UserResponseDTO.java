@@ -11,7 +11,7 @@ public record UserResponseDTO(
     String email,
     String document,
     UserType type,
-    Boolean active,
+    boolean active,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {}

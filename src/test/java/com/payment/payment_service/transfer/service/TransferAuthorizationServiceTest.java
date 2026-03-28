@@ -6,6 +6,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import com.payment.payment_service.shared.dto.UserSummary;
 import com.payment.payment_service.shared.dto.WalletSummary;
@@ -53,8 +55,8 @@ void shouldAuthorizeTransferSuccessfully() {
     UserSummary sender = new UserSummary(senderId, UserType.COMMON, true);
     UserSummary receiver = new UserSummary(receiverId, UserType.MERCHANT, true);
     
-    when(walletQueryService.getSummary(sourceWalletId)).thenReturn(sourceWallet);
-    when(walletQueryService.getSummary(destinationWalletId)).thenReturn(destinationWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(sourceWalletId))).thenReturn(sourceWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(destinationWalletId))).thenReturn(destinationWallet);
     when(userQueryService.getSummary(senderId)).thenReturn(sender);
     when(userQueryService.getSummary(receiverId)).thenReturn(receiver);
     
@@ -71,8 +73,8 @@ void shouldThrowWhenSenderAndReceiverAreSameUser() {
     WalletSummary destinationWallet = new WalletSummary(destinationWalletId, userId, new BigDecimal("50.00"));
     UserSummary user = new UserSummary(userId, UserType.COMMON, true);
     
-    when(walletQueryService.getSummary(sourceWalletId)).thenReturn(sourceWallet);
-    when(walletQueryService.getSummary(destinationWalletId)).thenReturn(destinationWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(sourceWalletId))).thenReturn(sourceWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(destinationWalletId))).thenReturn(destinationWallet);
     when(userQueryService.getSummary(userId)).thenReturn(user);
     
     assertThrows(UnauthorizedTransferException.class, () -> 
@@ -90,12 +92,12 @@ void shouldThrowWhenSenderCannotSend() {
     UserSummary sender = new UserSummary(senderId, UserType.MERCHANT, true);
     UserSummary receiver = new UserSummary(receiverId, UserType.MERCHANT, true);
     
-    when(walletQueryService.getSummary(sourceWalletId)).thenReturn(sourceWallet);
-    when(walletQueryService.getSummary(destinationWalletId)).thenReturn(destinationWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(sourceWalletId))).thenReturn(sourceWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(destinationWalletId))).thenReturn(destinationWallet);
     when(userQueryService.getSummary(senderId)).thenReturn(sender);
     when(userQueryService.getSummary(receiverId)).thenReturn(receiver);
     
-    assertThrows(UnauthorizedTransferException.class, () -> 
+    assertThrows(AccessDeniedException.class, () -> 
         transferAuthorizationService.authorize(sourceWalletId, destinationWalletId, amount)
     );
 }
@@ -110,8 +112,8 @@ void shouldThrowWhenReceiverCannotReceive() {
     UserSummary sender = new UserSummary(senderId, UserType.COMMON, true);
     UserSummary receiver = new UserSummary(receiverId, UserType.COMMON, true);
     
-    when(walletQueryService.getSummary(sourceWalletId)).thenReturn(sourceWallet);
-    when(walletQueryService.getSummary(destinationWalletId)).thenReturn(destinationWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(sourceWalletId))).thenReturn(sourceWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(destinationWalletId))).thenReturn(destinationWallet);
     when(userQueryService.getSummary(senderId)).thenReturn(sender);
     when(userQueryService.getSummary(receiverId)).thenReturn(receiver);
     
@@ -131,8 +133,8 @@ void shouldThrowWhenBalanceIsInsufficient() {
     UserSummary sender = new UserSummary(senderId, UserType.COMMON, true);
     UserSummary receiver = new UserSummary(receiverId, UserType.MERCHANT, true);
     
-    when(walletQueryService.getSummary(sourceWalletId)).thenReturn(sourceWallet);
-    when(walletQueryService.getSummary(destinationWalletId)).thenReturn(destinationWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(sourceWalletId))).thenReturn(sourceWallet);
+    when(walletQueryService.getSummary(Objects.requireNonNull(destinationWalletId))).thenReturn(destinationWallet);
     when(userQueryService.getSummary(senderId)).thenReturn(sender);
     when(userQueryService.getSummary(receiverId)).thenReturn(receiver);
     

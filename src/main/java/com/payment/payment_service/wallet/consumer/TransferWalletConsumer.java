@@ -22,19 +22,17 @@ public class TransferWalletConsumer {
     private final KafkaEventProducer kafkaEventProducer;
 
     @KafkaListener(
-        topics = "${kafka.topics.transfers}",
+        topics = "${kafka.topics.transfer-created}",
         groupId = "payment-service-wallet",
         containerFactory = "kafkaListenerContainerFactory"
     )
-    public void consume(Object event) {
+    public void consume(TransferCreatedEvent event) {
         try {
-            if (event instanceof TransferCreatedEvent e) {
-                log.info("Received TransferCreatedEvent transferId={} sourceWallet={} destWallet={}",
-                         e.transferId(), e.sourceWalletId(), e.destinationWalletId());
-                processTransfer(e);
-            }
+            log.info("Received TransferCreatedEvent transferId={} sourceWallet={} destWallet={}",
+                     event.transferId(), event.sourceWalletId(), event.destinationWalletId());
+            processTransfer(event);
         } catch (Exception ex) {
-            log.error("Error processing TransferCreatedEvent for transferId={}", event, ex);
+            log.error("Error processing TransferCreatedEvent for transferId={}", event.transferId(), ex);
             throw ex; // Deixa Kafka retry (3 tentativas antes do DLT)
         }
     }

@@ -4,7 +4,8 @@ import com.payment.payment_service.user.value_object.Document;
 
 public enum UserType {
     COMMON,
-    MERCHANT;
+    MERCHANT,
+    ADMIN;
 
     public static UserType from(Document document) {
         return document.isCpf() ? COMMON : MERCHANT;

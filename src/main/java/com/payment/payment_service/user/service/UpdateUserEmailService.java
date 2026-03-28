@@ -1,5 +1,6 @@
 package com.payment.payment_service.user.service;
 
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -22,7 +23,7 @@ public class UpdateUserEmailService {
 
     @Transactional
     public UserEntity execute(UUID id, String email) {
-        UserEntity user = userRepository.findById(id)
+        UserEntity user = userRepository.findById(Objects.requireNonNull(id))
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
                 
         var newEmail = new Email(email);

@@ -23,6 +23,7 @@ import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.user.value_object.Email;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class UpdateUserEmailServiceTest {
 
     @Mock
@@ -125,7 +126,7 @@ class UpdateUserEmailServiceTest {
         assertEquals(newEmail, result.getEmail().value());
         assertEquals("encodedPassword", result.getPassword());
         assertEquals(UserType.COMMON, result.getType());
-        assertTrue(result.getActive());
+        assertTrue(result.isActive());
         verify(userRepository).save(any(UserEntity.class));
     }
 

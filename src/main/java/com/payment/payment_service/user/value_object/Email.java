@@ -15,4 +15,8 @@ public record Email(String value) {
             throw new IllegalArgumentException("invalid email");
         }
     }
+    
+    public static boolean isValid(String email) {
+        return SIMPLE_EMAIL.matcher(email).matches();
+    }
 }

@@ -5,13 +5,13 @@ import java.util.Objects;
 public record Document(String value) {
 
     public Document {
-        Objects.requireNonNull(value, "document must not be null");
-        value = value.replaceAll("[.\\-/]", "").trim();
+    Objects.requireNonNull(value, "document must not be null");
+    value = normalize(value);
 
-        if (!isValidCpf(value) && !isValidCnpj(value)) {
-            throw new IllegalArgumentException("invalid document");
-        }
+    if (!isValidCpf(value) && !isValidCnpj(value)) {
+        throw new IllegalArgumentException("invalid document");
     }
+}
 
     public boolean isCpf() {
         return value.length() == 11;
@@ -19,6 +19,13 @@ public record Document(String value) {
 
     public boolean isCnpj() {
         return value.length() == 14;
+    }
+
+    public static boolean isValid(String document) {
+        if (document == null) return false;
+
+        String normalized = normalize(document);
+        return isValidCpf(normalized) || isValidCnpj(normalized);
     }
 
     private static boolean isValidCpf(String v) {
@@ -52,5 +59,9 @@ public record Document(String value) {
         return isCpf()
             ? "***." + value.substring(3, 6) + "." + value.substring(6, 9) + "-" + value.substring(9)
             : "**." + value.substring(2, 5) + "." + value.substring(5, 8) + "/" + value.substring(8, 12) + "-" + value.substring(12);
+    }
+
+    private static String normalize(String value) {
+        return value.replaceAll("\\D", "");
     }
 }   

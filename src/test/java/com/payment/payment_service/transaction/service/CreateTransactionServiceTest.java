@@ -14,11 +14,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.lang.NonNull;
+
 import com.payment.payment_service.transaction.entity.TransactionEntity;
 import com.payment.payment_service.transaction.repository.TransactionRepository;
 import com.payment.payment_service.transaction.type.TransactionType;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class CreateTransactionServiceTest {
 
     @Mock
@@ -41,13 +44,13 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.CREDIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId, amount);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getWalletId().equals(walletId) &&
             transaction.getTransferId().equals(transferId) &&
             transaction.getType() == TransactionType.CREDIT &&
@@ -60,13 +63,13 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.DEBIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeDebit(walletId, transferId, amount);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getWalletId().equals(walletId) &&
             transaction.getTransferId().equals(transferId) &&
             transaction.getType() == TransactionType.DEBIT &&
@@ -105,13 +108,13 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.CREDIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId, BigDecimal.ZERO);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getWalletId().equals(walletId) &&
             transaction.getTransferId().equals(transferId) &&
             transaction.getType() == TransactionType.CREDIT &&
@@ -125,13 +128,13 @@ class CreateTransactionServiceTest {
         BigDecimal largeAmount = BigDecimal.valueOf(1000000.0);
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.CREDIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId, largeAmount);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getAmount().equals(largeAmount)
         ));
     }
@@ -144,7 +147,7 @@ class CreateTransactionServiceTest {
 
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(any(UUID.class), any(UUID.class), eq(TransactionType.CREDIT)))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId1, amount);
@@ -159,13 +162,13 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.DEBIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeDebit(walletId, transferId, amount);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getType() == TransactionType.DEBIT
         ));
     }
@@ -175,13 +178,13 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.CREDIT))
             .thenReturn(false);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId, amount);
 
         // Assert
-        verify(transactionRepository).save(argThat(transaction ->
+        verify(transactionRepository).save(argThat((@NonNull TransactionEntity transaction) ->
             transaction.getType() == TransactionType.CREDIT
         ));
     }
@@ -191,7 +194,7 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.CREDIT))
             .thenReturn(false, true);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeCredit(walletId, transferId, amount);
@@ -206,7 +209,7 @@ class CreateTransactionServiceTest {
         // Arrange
         when(transactionRepository.existsByWalletIdAndTransferIdAndType(walletId, transferId, TransactionType.DEBIT))
             .thenReturn(false, true);
-        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(TransactionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0, TransactionEntity.class));
 
         // Act
         createTransactionService.executeDebit(walletId, transferId, amount);

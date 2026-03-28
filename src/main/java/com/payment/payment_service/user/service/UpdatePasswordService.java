@@ -1,5 +1,6 @@
 package com.payment.payment_service.user.service;
 
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -11,7 +12,7 @@ import com.payment.payment_service.user.exceptions.UserPasswordException;
 import com.payment.payment_service.user.repository.UserRepository;
 import com.payment.payment_service.user.value_object.Password;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UpdatePasswordService {
@@ -26,7 +27,7 @@ public class UpdatePasswordService {
 
     @Transactional
     public UserEntity execute(UUID id, String password) {
-        UserEntity user = userRepository.findById(id)
+        UserEntity user = userRepository.findById(Objects.requireNonNull(id))
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         var newPassword = new Password(password);

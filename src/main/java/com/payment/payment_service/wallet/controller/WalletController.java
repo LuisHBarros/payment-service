@@ -2,6 +2,8 @@ package com.payment.payment_service.wallet.controller;
 
 import org.springframework.web.bind.annotation.RestController;
 
+import com.payment.payment_service.config.AuthenticatedUser;
+import com.payment.payment_service.config.SecurityUtils;
 import com.payment.payment_service.wallet.dto.WalletResponseDTO;
 import com.payment.payment_service.wallet.entity.WalletEntity;
 import com.payment.payment_service.wallet.service.GetWalletService;
@@ -9,6 +11,7 @@ import com.payment.payment_service.wallet.service.GetWalletService;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,7 +26,9 @@ public class WalletController {
     }
     
     @GetMapping("/{userId}")
-    public ResponseEntity<WalletResponseDTO> getWallet(@PathVariable UUID userId) {
+    public ResponseEntity<WalletResponseDTO> getWallet(@PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedUser auth) {
+        SecurityUtils.requireOwnership(auth, userId);
         WalletEntity wallet = getWalletService.execute(userId);
         return ResponseEntity.ok(toResponseDTO(wallet));
     }

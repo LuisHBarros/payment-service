@@ -16,6 +16,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 @Configuration
 public class KafkaConsumerConfig {
@@ -26,7 +27,7 @@ public class KafkaConsumerConfig {
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
         JsonDeserializer<Object> deserializer = new JsonDeserializer<>();
-        deserializer.addTrustedPackages("com.payment.payment_service.shared.event");
+        deserializer.addTrustedPackages("com.payment.payment_service.shared.event", "com.payment.payment_service.transfer.event");
 
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -42,10 +43,10 @@ public class KafkaConsumerConfig {
             KafkaTemplate<String, Object> kafkaTemplate) {
 
         var factory = new ConcurrentKafkaListenerContainerFactory<String, Object>();
-        factory.setConsumerFactory(consumerFactory);
+        factory.setConsumerFactory(Objects.requireNonNull(consumerFactory));
 
         // 3 tentativas com intervalo de 1s antes de enviar pro DLT
-        var recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        var recoverer = new DeadLetterPublishingRecoverer(Objects.requireNonNull(kafkaTemplate));
         var errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
         factory.setCommonErrorHandler(errorHandler);
 

@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.payment.payment_service.shared.kafka.KafkaEventProducer;
 import com.payment.payment_service.user.entity.UserEntity;
 import com.payment.payment_service.user.exceptions.UserDocumentException;
 import com.payment.payment_service.user.exceptions.UserEmailException;
@@ -22,6 +23,7 @@ import com.payment.payment_service.user.type.UserType;
 import com.payment.payment_service.user.value_object.Email;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class CreateUserServiceTest {
 
     @Mock
@@ -30,8 +32,13 @@ class CreateUserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private KafkaEventProducer kafkaEventProducer;
+    
     @InjectMocks
     private CreateUserService createUserService;
+
+
 
     private final String validName = "John Doe";
     private final String validEmail = "john.doe@example.com";
@@ -62,7 +69,7 @@ class CreateUserServiceTest {
         assertNotNull(userId);
         verify(userRepository).save(any(UserEntity.class));
         verify(passwordEncoder).encode(anyString());
-    }
+        }
 
     @Test
     void execute_WithExistingEmail_ShouldThrowUserEmailException() {
@@ -123,7 +130,7 @@ class CreateUserServiceTest {
 
         // Assert
         verify(userRepository).save(argThat(user ->
-            user.getActive() != null && user.getActive()
+            user.isActive()
         ));
     }
 

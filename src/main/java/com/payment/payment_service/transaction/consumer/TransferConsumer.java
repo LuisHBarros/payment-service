@@ -24,31 +24,65 @@ public class TransferConsumer {
     private final KafkaEventProducer kafkaEventProducer;
 
     @KafkaListener(
-        topics = "${kafka.topics.wallets}",
+        topics = "${kafka.topics.wallet-debits}",
         groupId = "payment-service-transaction",
         containerFactory = "kafkaListenerContainerFactory"
     )
-    public void consume(Object event) {
+    public void consumeDebit(WalletDebitedEvent event) {
         try {
-            if (event instanceof WalletDebitedEvent e) {
-                log.info("Received WalletDebitedEvent walletId={} transferId={}", e.walletId(), e.transferId());
-                createTransactionService.executeDebit(e.walletId(), e.transferId(), e.amount());
-                publishTransferCompletion(e.transferId());
-            } else if (event instanceof WalletCreditedEvent e) {
-                log.info("Received WalletCreditedEvent walletId={} transferId={}", e.walletId(), e.transferId());
-                createTransactionService.executeCredit(e.walletId(), e.transferId(), e.amount());
-                publishTransferCompletion(e.transferId());
-            }
+            log.info("Received WalletDebitedEvent walletId={} transferId={}",
+                event.walletId(),
+                event.transferId()
+            );
+
+            createTransactionService.executeDebit(
+                event.walletId(),
+                event.transferId(),
+                event.amount()
+            );
+
+            publishTransferCompletion(event.transferId());
+
         } catch (Exception ex) {
-            log.error("Error processing wallet event for transferId={}",
-                     event instanceof WalletDebitedEvent ? ((WalletDebitedEvent) event).transferId() :
-                     event instanceof WalletCreditedEvent ? ((WalletCreditedEvent) event).transferId() : "unknown", ex);
-            // Publicar FAILED status se a criação de transação falhar
-            if (event instanceof WalletDebitedEvent e) {
-                publishTransferFailure(e.transferId());
-            } else if (event instanceof WalletCreditedEvent e) {
-                publishTransferFailure(e.transferId());
-            }
+            log.error(
+                "Error processing WalletDebitedEvent transferId={}",
+                event.transferId(),
+                ex
+            );
+
+            publishTransferFailure(event.transferId());
+            throw ex;
+        }
+    }
+
+    @KafkaListener(
+        topics = "${kafka.topics.wallet-credits}",
+        groupId = "payment-service-transaction",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void consumeCredit(WalletCreditedEvent event) {
+        try {
+            log.info("Received WalletCreditedEvent walletId={} transferId={}",
+                event.walletId(),
+                event.transferId()
+            );
+
+            createTransactionService.executeCredit(
+                event.walletId(),
+                event.transferId(),
+                event.amount()
+            );
+
+            publishTransferCompletion(event.transferId());
+
+        } catch (Exception ex) {
+            log.error(
+                "Error processing WalletCreditedEvent transferId={}",
+                event.transferId(),
+                ex
+            );
+
+            publishTransferFailure(event.transferId());
             throw ex;
         }
     }
@@ -58,10 +92,19 @@ public class TransferConsumer {
             kafkaEventProducer.publishTransferStatusChanged(
                 new TransferStatusChangedEvent(transferId, TransferStatus.COMPLETED)
             );
-            log.info("Published TransferStatusChangedEvent(COMPLETED) for transferId={}", transferId);
-        } catch (Exception e) {
-            log.error("Failed to publish COMPLETED status for transferId={}", transferId, e);
-            throw e;
+
+            log.info(
+                "Published TransferStatusChangedEvent(COMPLETED) transferId={}",
+                transferId
+            );
+
+        } catch (Exception ex) {
+            log.error(
+                "Failed to publish COMPLETED status transferId={}",
+                transferId,
+                ex
+            );
+            throw ex;
         }
     }
 
@@ -70,9 +113,18 @@ public class TransferConsumer {
             kafkaEventProducer.publishTransferStatusChanged(
                 new TransferStatusChangedEvent(transferId, TransferStatus.FAILED)
             );
-            log.info("Published TransferStatusChangedEvent(FAILED) for transferId={}", transferId);
-        } catch (Exception e) {
-            log.error("Failed to publish FAILED status for transferId={}", transferId, e);
+
+            log.info(
+                "Published TransferStatusChangedEvent(FAILED) transferId={}",
+                transferId
+            );
+
+        } catch (Exception ex) {
+            log.error(
+                "Failed to publish FAILED status transferId={}",
+                transferId,
+                ex
+            );
         }
     }
 }

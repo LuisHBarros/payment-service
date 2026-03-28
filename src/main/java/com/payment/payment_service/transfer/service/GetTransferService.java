@@ -2,7 +2,7 @@ package com.payment.payment_service.transfer.service;
 
 import java.util.UUID;
 
-import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties.Pageable;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 

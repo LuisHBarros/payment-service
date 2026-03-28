@@ -3,24 +3,82 @@ spring:
     name: payment-service
   crypto:
     secret: ${APP_CRYPTO_SECRET}
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        spring.json.add.type.headers: false
+        spring.json.add.type.headers: true
     consumer:
       group-id: payment-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.payment.payment_service.shared.event
+        spring.json.trusted.packages: com.payment.payment_service.shared.event, com.payment.payment_service.transfer.event
 
 kafka:
   topics:
     users: payment.users
-    wallets: payment.wallets
-    transfers: payment.transfers
+    wallet-debits: payment.wallet.debits
+    wallet-credits: payment.wallet.credits
+    transfer-created: payment.transfer.created
+    transfer-status: payment.transfer.status
 
+
+outbox:
+  poll-interval: 500
+  max-attempts: 10
+  cleanup:
+    retention-days: 7
+    interval: 60000 # 1 minute
+
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000 # 24 hours
+
+rate-limit:
+  enabled: ${RATE_LIMIT_ENABLED:true}
+  endpoints:
+    POST:/api/v1/auth/login:
+      capacity: 5
+      refill-tokens: 5
+      period-milliseconds: 60000
+    POST:/api/v1/users:
+      capacity: 3
+      refill-tokens: 3
+      period-milliseconds: 60000
+    POST:/api/v1/transfers:
+      capacity: 10
+      refill-tokens: 10
+      period-milliseconds: 60000
+    PATCH:/api/v1/users/{id}:
+      capacity: 5
+      refill-tokens: 5
+      period-milliseconds: 60000
+    DELETE:/api/v1/users/{id}:
+      capacity: 3
+      refill-tokens: 3
+      period-milliseconds: 60000
+    GET:/api/v1/users:
+      capacity: 30
+      refill-tokens: 30
+      period-milliseconds: 60000
+    GET:/api/v1/users/{id}:
+      capacity: 30
+      refill-tokens: 30
+      period-milliseconds: 60000
+    GET:/api/v1/wallets/{id}:
+      capacity: 30
+      refill-tokens: 30
+      period-milliseconds: 60000
+    GET:/api/v1/transfers:
+      capacity: 30
+      refill-tokens: 30
+      period-milliseconds: 60000

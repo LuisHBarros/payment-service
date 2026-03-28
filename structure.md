@@ -1,384 +1,316 @@
-# Payment Service - Estrutura do Projeto
+# Payment Service - Project Structure
 
-## 📁 Estrutura de Pacotes
+Last updated: 2026-03-28
 
-```
+## Package layout
+
+```text
 com.payment.payment_service
-├── shared                          ← Contratos, eventos e infraestrutura transversal
-│   ├── config
-│   │   ├── KafkaTopicsConfig       ← Configuração de tópicos Kafka
-│   │   └── KafkaConsumerConfig     ← Configuração de consumers Kafka
-│   ├── crypto
-│   │   ├── AesEncryptor           ← Criptografia AES-256-CBC
-│   │   └── HashUtil               ← Hash SHA-256
-│   ├── dto
-│   │   ├── UserSummary            ← DTO resumido de usuário
-│   │   └── WalletSummary          ← DTO resumido de carteira
-│   ├── entity
-│   │   └── BaseEntity             ← Entidade base com timestamps
-│   ├── event
-│   │   ├── UserCreatedEvent       ← Evento de criação de usuário
-│   │   ├── WalletDebitedEvent    ← Evento de débito em carteira
-│   │   ├── WalletCreditedEvent   ← Evento de crédito em carteira
-│   │   └── TransferStatusChangedEvent ← Evento de mudança de status
-│   ├── kafka
-│   │   └── KafkaEventProducer     ← Produtor de eventos Kafka
-│   ├── query
-│   │   ├── UserQueryService      ← Interface de consulta de usuário
-│   │   └── WalletQueryService    ← Interface de consulta de carteira
-│   └── type
-│       └── TransferStatus         ← Enum de status de transferência
-│
-├── user                            ← Contexto de Usuários
-│   ├── controller
-│   │   └── UserController         ← REST endpoints para usuários
-│   ├── service
-│   │   ├── CreateUserService      ← Criação de usuário
-│   │   ├── DeleteUserService      ← Remoção de usuário
-│   │   ├── GetUserService         ← Consulta de usuário
-│   │   ├── PatchUserService       ← Atualização parcial de usuário
-│   │   ├── UpdatePasswordService  ← Atualização de senha
-│   │   ├── UpdateUserEmailService ← Atualização de e-mail
-│   │   └── UserQueryServiceImpl   ← Implementação de UserQueryService
-│   ├── repository
-│   │   └── UserRepository         ← Repositório JPA de usuários
-│   ├── entity
-│   │   └── UserEntity            ← Entidade de usuário
-│   ├── dto
-│   │   ├── CreateUserRequestDTO  ← DTO para criação
-│   │   ├── PatchUserRequestDTO   ← DTO para atualização parcial
-│   │   └── UserResponseDTO       ← DTO de resposta
-│   ├── exception
-│   │   ├── UserDocumentException  ← Erro de documento duplicado
-│   │   ├── UserEmailException    ← Erro de e-mail duplicado
-│   │   ├── UserNotFoundException  ← Usuário não encontrado
-│   │   └── UserPasswordException ← Erro de validação de senha
-│   ├── type
-│   │   └── UserType               ← Enum (COMMON, MERCHANT)
-│   ├── value_object
-│   │   ├── Document              ← Value Object para documento
-│   │   ├── Email                  ← Value Object para e-mail
-│   │   └── Password               ← Value Object para senha
-│   └── converter
-│       ├── DocumentConverter      ← JPA converter para documento
-│       └── EmailConverter         ← JPA converter para e-mail
-│
-├── wallet                          ← Contexto de Carteiras
-│   ├── controller
-│   │   └── WalletController       ← REST endpoints para carteiras
-│   ├── service
-│   │   ├── CreateWalletService    ← Criação de carteira
-│   │   ├── GetWalletService       ← Consulta de carteira
-│   │   ├── ProcessTransferService ← Processamento de transferências
-│   │   └── WalletQueryServiceImpl ← Implementação de WalletQueryService
-│   ├── repository
-│   │   ├── WalletRepository       ← Repositório JPA de carteiras
-│   │   └── ProcessedTransferRepository ← Controle de idempotência
-│   ├── entity
-│   │   ├── WalletEntity           ← Entidade de carteira
-│   │   └── ProcessedTransferEntity ← Controle de processamento
-│   ├── dto
-│   │   └── WalletResponseDTO      ← DTO de resposta
-│   ├── exception
-│   │   ├── WalletAlreadyExistsException ← Carteira já existe
-│   │   ├── WalletNotFoundException    ← Carteira não encontrada
-│   │   └── InsufficientBalanceException ← Saldo insuficiente
-│   └── consumer
-│       ├── CreateWalletConsumer   ← Consome UserCreatedEvent
-│       └── TransferWalletConsumer ← Consome TransferCreatedEvent
-│
-├── transfer                        ← Contexto de Transferências
-│   ├── controller
-│   │   └── TransactionController   ← REST endpoints para transferências
-│   ├── service
-│   │   ├── CreateTransferService   ← Criação de transferência
-│   │   ├── GetTransferService      ← Consulta de transferência
-│   │   ├── TransferAuthorizationService ← Autorização de transferência
-│   │   └── TransferStatusUpdateService ← Atualização de status
-│   ├── repository
-│   │   └── TransferRepository      ← Repositório JPA de transferências
-│   ├── entity
-│   │   └── TransferEntity         ← Entidade de transferência
-│   ├── dto
-│   │   ├── CreateTransferRequestDTO ← DTO para criação
-│   │   └── TransferResponseDTO      ← DTO de resposta
-│   ├── exception
-│   │   ├── TransferException        ← Erro genérico de transferência
-│   │   ├── InvalidTransferException ← Transferência inválida
-│   │   ├── UnauthorizedTransferException ← Transferência não autorizada
-│   │   └── TransferNotFoundException ← Transferência não encontrada
-│   ├── listener
-│   │   ├── TransferCreatedListener ← Listener de Spring Events
-│   │   └── TransferPublishService  ← Publicação de eventos Kafka
-│   ├── event
-│   │   └── TransferCreatedEvent    ← Evento de criação de transferência
-│   └── consumer
-│       └── TransferStatusConsumer  ← Consome TransferStatusChangedEvent
-│
-├── transaction                     ← Contexto de Transações (Ledger)
-│   ├── service
-│   │   └── CreateTransactionService ← Criação de transações
-│   ├── repository
-│   │   └── TransactionRepository     ← Repositório JPA de transações
-│   ├── entity
-│   │   └── TransactionEntity        ← Entidade de transação
-│   ├── type
-│   │   └── TransactionType          ← Enum (DEBIT, CREDIT)
-│   └── consumer
-│       └── TransferConsumer         ← Consome eventos de wallet
-│
-├── config
-│   └── SecurityConfig              ← Configuração de segurança Spring
-│
-└── PaymentServiceApplication       ← Classe principal Spring Boot
+|-- auth
+|   |-- controller
+|   |   `-- AuthController
+|   |-- dto
+|   |   |-- LoginRequest
+|   |   `-- LoginResponse
+|   |-- service
+|   |   |-- AuthService
+|   |   `-- JwtService
+|   `-- JwtAuthenticationFilter
+|
+|-- config
+|   |-- AuthenticatedUser
+|   |-- GlobalExceptionHandler
+|   |-- RateLimitConfig
+|   |-- RateLimitFilter
+|   |-- RateLimitProperties
+|   |-- SecurityConfig
+|   `-- SecurityUtils
+|
+|-- shared
+|   |-- config
+|   |   |-- KafkaConsumerConfig
+|   |   `-- KafkaTopicsConfig
+|   |-- crypto
+|   |   |-- AesEncryptor
+|   |   `-- HashUtil
+|   |-- dto
+|   |   |-- UserSummary
+|   |   `-- WalletSummary
+|   |-- entity
+|   |   |-- BaseEntity
+|   |   `-- OutboxEntity
+|   |-- event
+|   |   |-- TransferStatusChangedEvent
+|   |   |-- UserCreatedEvent
+|   |   |-- WalletCreditedEvent
+|   |   `-- WalletDebitedEvent
+|   |-- kafka
+|   |   |-- KafkaEventProducer
+|   |   `-- OutboxPublisher
+|   |-- query
+|   |   |-- UserQueryService
+|   |   `-- WalletQueryService
+|   |-- repository
+|   |   `-- OutboxRepository
+|   `-- type
+|       `-- TransferStatus
+|
+|-- user
+|   |-- controller
+|   |   `-- UserController
+|   |-- converter
+|   |   |-- DocumentConverter
+|   |   `-- EmailConverter
+|   |-- dto
+|   |   |-- CreateUserRequestDTO
+|   |   |-- PatchUserRequestDTO
+|   |   `-- UserResponseDTO
+|   |-- entity
+|   |   `-- UserEntity
+|   |-- exceptions
+|   |   |-- UserDocumentException
+|   |   |-- UserEmailException
+|   |   |-- UserNotFoundException
+|   |   `-- UserPasswordException
+|   |-- repository
+|   |   `-- UserRepository
+|   |-- service
+|   |   |-- CreateUserService
+|   |   |-- DeleteUserService
+|   |   |-- GetUserService
+|   |   |-- PatchUserService
+|   |   |-- UpdatePasswordService
+|   |   |-- UpdateUserEmailService
+|   |   `-- UserQueryServiceImpl
+|   |-- type
+|   |   `-- UserType
+|   `-- value_object
+|       |-- Document
+|       |-- Email
+|       `-- Password
+|
+|-- wallet
+|   |-- consumer
+|   |   |-- CreateWalletConsumer
+|   |   `-- TransferWalletConsumer
+|   |-- controller
+|   |   `-- WalletController
+|   |-- dto
+|   |   `-- WalletResponseDTO
+|   |-- entity
+|   |   |-- ProcessedTransferEntity
+|   |   `-- WalletEntity
+|   |-- exception
+|   |   |-- InsufficientBalanceException
+|   |   |-- WalletAlreadyExistsException
+|   |   `-- WalletNotFoundException
+|   |-- repository
+|   |   |-- ProcessedTransferRepository
+|   |   `-- WalletRepository
+|   `-- service
+|       |-- CreateWalletService
+|       |-- GetWalletService
+|       |-- ProcessTransferService
+|       `-- WalletQueryServiceImpl
+|
+|-- transfer
+|   |-- consumer
+|   |   `-- TransferStatusConsumer
+|   |-- controller
+|   |   `-- TransferController
+|   |-- dto
+|   |   |-- CreateTransferRequestDTO
+|   |   `-- TransferResponseDTO
+|   |-- entity
+|   |   `-- TransferEntity
+|   |-- event
+|   |   `-- TransferCreatedEvent
+|   |-- exception
+|   |   |-- TransferException
+|   |   |-- TransferNotFoundException
+|   |   `-- UnauthorizedTransferException
+|   |-- repository
+|   |   `-- TransferRepository
+|   `-- service
+|       |-- CreateTransferService
+|       |-- GetTransferService
+|       |-- TransferAuthorizationService
+|       `-- TransferStatusUpdateService
+|
+|-- transaction
+|   |-- consumer
+|   |   `-- TransferConsumer
+|   |-- entity
+|   |   `-- TransactionEntity
+|   |-- repository
+|   |   `-- TransactionRepository
+|   |-- service
+|   |   `-- CreateTransactionService
+|   `-- type
+|       `-- TransactionType
+|
+`-- PaymentServiceApplication
 ```
 
----
+## Runtime responsibilities
 
-## 🌐 API Endpoints
+### `auth`
 
-### 👥 Usuários
+- Accepts login by email or document.
+- Issues self-signed JWTs with JJWT.
+- Revokes tokens on logout by storing the JWT ID in Redis until token expiry.
+- Injects authenticated user context through `JwtAuthenticationFilter`.
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `POST` | `/api/v1/users` | Cria novo usuário (tipo derivado do documento) |
-| `GET` | `/api/v1/users` | Lista todos os usuários (documento mascarado) |
-| `GET` | `/api/v1/users/{id}` | Retorna usuário por ID |
-| `PATCH` | `/api/v1/users/{id}` | Atualiza e-mail e/ou senha |
-| `DELETE` | `/api/v1/users/{id}` | Remove usuário por ID |
+### `config`
 
-### 💰 Carteiras
+- Centralizes Spring Security, rate limiting, error handling, and ownership checks.
+- `SecurityUtils.requireOwnership(...)` is the guard used by user, wallet, and transfer controllers.
+- Rate limiting is optional and is attached after JWT authentication when enabled.
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/api/v1/wallets/{userId}` | Retorna carteira do usuário |
+### `shared`
 
-### 🔄 Transferências
+- Holds cross-cutting infrastructure and contracts.
+- Defines Kafka topics, consumer error handling, shared events, and the outbox model.
+- `OutboxPublisher` is the scheduled relay that pulls pending rows from `outbox`, publishes them to Kafka, and handles retries and cleanup.
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `POST` | `/api/v1/transfers` | Inicia nova transferência |
-| `GET` | `/api/v1/transfers?walletId={id}` | Lista transferências da carteira (paginado) |
+### `user`
 
----
+- Manages registration, retrieval, update, and deletion of users.
+- Stores encrypted email and document values through JPA converters.
+- Publishes `UserCreatedEvent` after persistence.
 
-## 🐙 Kafka Topics
+### `wallet`
 
-### Tópicos Principais
+- Creates one wallet per user.
+- Processes transfer balance mutations with deterministic lock ordering.
+- Uses `ProcessedTransferEntity` for idempotency.
+- Writes debit and credit events to the outbox after a successful wallet mutation.
 
-| Tópico | Eventos | Produzido por | Consumido por |
-|--------|---------|---------------|---------------|
+### `transfer`
+
+- Owns transfer creation and transfer status tracking.
+- Validates sender, receiver, ownership, and balance preconditions before creating a transfer.
+- Persists transfer creation as `PENDING` and records `TRANSFER_CREATED` in the outbox.
+
+### `transaction`
+
+- Maintains the ledger of debit and credit entries.
+- Reacts to wallet events and publishes the final transfer status event.
+
+## Public HTTP API
+
+| Method | Route | Access | Notes |
+|--------|-------|--------|-------|
+| `POST` | `/api/v1/auth/login` | Public | Login with `identifier` + `password` |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Revokes current JWT via Redis blacklist |
+| `POST` | `/api/v1/users` | Public | Creates a user; type is derived from CPF/CNPJ |
+| `GET` | `/api/v1/users` | `ADMIN` only | Paginated list |
+| `GET` | `/api/v1/users/{id}` | Owner or `ADMIN` | Ownership enforced in controller |
+| `PATCH` | `/api/v1/users/{id}` | Owner or `ADMIN` | Updates email and/or password |
+| `DELETE` | `/api/v1/users/{id}` | Owner or `ADMIN` | Soft/active logic is not used here; service deletes record |
+| `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns the wallet for a user |
+| `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Source wallet must belong to caller |
+| `GET` | `/api/v1/transfers?walletId=...` | Owner or `ADMIN` | Paginated, sorted by `createdAt DESC` |
+| `GET` | `/actuator/health` | Public | Health endpoint |
+
+## Kafka topology
+
+### Main topics
+
+| Topic | Event types | Main producer(s) | Main consumer(s) |
+|-------|-------------|------------------|------------------|
 | `payment.users` | `UserCreatedEvent` | `CreateUserService` | `CreateWalletConsumer` |
-| `payment.wallets` | `WalletDebitedEvent`, `WalletCreditedEvent` | `ProcessTransferService` | `TransferConsumer` |
-| `payment.transfers` | `TransferCreatedEvent`, `TransferStatusChangedEvent` | `TransferPublishService`, `TransferConsumer` | `TransferWalletConsumer`, `TransferStatusConsumer` |
+| `payment.wallet.debits` | `WalletDebitedEvent` | `OutboxPublisher` | `transaction.TransferConsumer.consumeDebit(...)` |
+| `payment.wallet.credits` | `WalletCreditedEvent` | `OutboxPublisher` | `transaction.TransferConsumer.consumeCredit(...)` |
+| `payment.transfer.created` | `TransferCreatedEvent` | `OutboxPublisher` | `wallet.TransferWalletConsumer` |
+| `payment.transfer.status` | `TransferStatusChangedEvent` | `KafkaEventProducer` from transaction/wallet flow | `transfer.TransferStatusConsumer` |
 
-### Dead Letter Topics
+### Dead-letter topics
 
-| Tópico | Uso |
-|--------|-----|
-| `payment.users.DLT` | Mensagens com falha em `payment.users` |
-| `payment.wallets.DLT` | Mensagens com falha em `payment.wallets` |
-| `payment.transfers.DLT` | Mensagens com falha em `payment.transfers` |
+- Each main topic above also has a `.DLT` companion created by `KafkaTopicsConfig`.
+- `KafkaConsumerConfig` uses `DefaultErrorHandler` plus `DeadLetterPublishingRecoverer`.
+- Current retry policy is fixed backoff: 3 retries, 1 second apart, then DLT.
 
----
+## Transfer lifecycle
 
-## 🔄 Fluxo de Eventos
-
-### Fluxo de Criação de Usuário
-
-```
-POST /api/v1/users
-  → CreateUserService.execute()
-    → UserRepository.save()
-    → kafkaEventProducer.publishUserCreated()
-      → UserCreatedEvent (Kafka)
-        → CreateWalletConsumer.consume()
-          → CreateWalletService.execute()
-```
-
-### Fluxo de Transferência
-
-```
+```text
 POST /api/v1/transfers
-  → CreateTransferService.execute()
-    → TransferAuthorizationService.authorize()
-    → TransferRepository.save() (status: PENDING)
-    → eventPublisher.publishEvent() (Spring Event)
-      → TransferCreatedListener.handle()
-        → TransferPublishService.publish() (Kafka)
-          → TransferCreatedEvent (Kafka)
-            → TransferWalletConsumer.consume()
-              → ProcessTransferService.execute()
-                → Lock pessimista determinístico
-                → Débito e crédito atômicos
-                → kafkaEventProducer.publishWalletDebited()
-                → kafkaEventProducer.publishWalletCredited()
-                  → WalletDebitedEvent (Kafka)
-                    → TransferConsumer.consume()
-                      → CreateTransactionService.executeDebit()
-                  → WalletCreditedEvent (Kafka)
-                    → TransferConsumer.consume()
-                      → CreateTransactionService.executeCredit()
-                  → kafkaEventProducer.publishTransferStatusChanged() (COMPLETED)
-                    → TransferStatusChangedEvent (Kafka)
-                      → TransferStatusConsumer.consume()
-                        → TransferRepository.updateStatus()
+  -> TransferController
+  -> SecurityUtils.requireOwnership(sourceWalletId)
+  -> CreateTransferService
+     -> TransferAuthorizationService.authorize(...)
+     -> save TransferEntity(status=PENDING)
+     -> save OutboxEntity(eventType=TRANSFER_CREATED)
+
+Scheduled OutboxPublisher
+  -> publish TransferCreatedEvent to payment.transfer.created
+
+TransferWalletConsumer
+  -> ProcessTransferService.execute(...)
+     -> idempotency check via ProcessedTransferRepository
+     -> deterministic wallet locking
+     -> debit source wallet
+     -> credit destination wallet
+     -> save processed marker
+     -> save outbox rows WALLET_DEBITED and WALLET_CREDITED
+
+Scheduled OutboxPublisher
+  -> publish wallet events
+
+transaction.TransferConsumer
+  -> persist debit and credit ledger rows
+  -> publish TransferStatusChangedEvent(COMPLETED or FAILED)
+
+transfer.TransferStatusConsumer
+  -> update TransferEntity status idempotently
 ```
 
----
+## Persistence model
 
-## 🗄️ Entidades de Banco
+| Entity | Purpose |
+|--------|---------|
+| `UserEntity` | Registered user account with encrypted PII and hashed password |
+| `WalletEntity` | User balance container |
+| `TransferEntity` | Transfer request and current status |
+| `TransactionEntity` | Immutable ledger entry for debit/credit history |
+| `ProcessedTransferEntity` | Idempotency marker for transfer processing |
+| `OutboxEntity` | Pending/published integration event record |
 
-### UserEntity
+## Test layout
 
-```java
-- id: UUID
-- name: String
-- email: String (encrypted)
-- password: String (BCrypt)
-- document: String (AES-256-CBC)
-- document_hash: String (SHA-256)
-- type: UserType (COMMON/MERCHANT)
-- active: Boolean
-- createdAt: LocalDateTime
-- updatedAt: LocalDateTime
-```
-
-### WalletEntity
-
-```java
-- id: UUID
-- userId: UUID
-- balance: BigDecimal
-- createdAt: LocalDateTime
-- updatedAt: LocalDateTime
-```
-
-### TransferEntity
-
-```java
-- id: UUID
-- sourceWalletId: UUID
-- destinationWalletId: UUID
-- amount: BigDecimal
-- status: TransferStatus (PENDING/COMPLETED/FAILED)
-- createdAt: LocalDateTime
-- updatedAt: LocalDateTime
-```
-
-### TransactionEntity
-
-```java
-- id: UUID
-- walletId: UUID
-- transferId: UUID
-- type: TransactionType (DEBIT/CREDIT)
-- amount: BigDecimal
-- createdAt: LocalDateTime (imutável)
-```
-
-### ProcessedTransferEntity
-
-```java
-- id: UUID
-- createdAt: LocalDateTime
-```
-
----
-
-## 🎯 Padrões e Convenções
-
-### Value Objects
-
-- **Document**: Valida CPF/CNPJ e deriva `UserType`
-- **Email**: Valida formato de e-mail
-- **Password**: Valida requisitos de segurança
-
-### JPA Converters
-
-- **DocumentConverter**: Criptografa/Descriptografa documentos
-- **EmailConverter**: Criptografa/Descriptografa e-mails
-
-### Idempotência
-
-- `ProcessedTransferRepository`: Garante processamento único de transferências
-- `TransferStatusConsumer`: Verifica status antes de atualizar
-
-### Lock Strategy
-
-- Lock pessimista determinístico (menor UUID primeiro)
-- Previne deadlocks matematicamente
-- Permite concorrência em transferências não conflitantes
-
-### Retry Pattern
-
-- 3 tentativas com backoff exponencial (1s, 2s, 4s)
-- Fallback para status FAILED ao esgotar tentativas
-
----
-
-## 🔐 Segurança
-
-### Criptografia
-
-- **AES-256-CBC**: Documentos e e-mails em repouso
-- **BCrypt**: Senhas
-- **SHA-256**: Hash para unicidade de documentos
-
-### Autorização
-
-- `COMMON`: Pode enviar e receber transferências
-- `MERCHANT`: Apenas pode receber transferências
-
----
-
-## 📊 Testes
-
-### Estrutura de Testes
-
-```
+```text
 src/test/java/com/payment/payment_service
-├── user
-│   ├── controller
-│   │   └── UserControllerTest
-│   └── service
-│       ├── CreateUserServiceTest
-│       ├── DeleteUserServiceTest
-│       ├── GetUserServiceTest
-│       ├── PatchUserServiceTest
-│       ├── UpdatePasswordServiceTest
-│       └── UpdateUserEmailServiceTest
-├── wallet
-│   └── service
-│       ├── CreateWalletServiceTest
-│       └── GetWalletServiceTest
-├── transfer
-│   └── service
-│       ├── TransferAuthorizationServiceTest
-│       └── GetTransferServiceTest
-└── transaction
-    └── service
-        └── CreateTransactionServiceTest
+|-- config
+|   `-- TestRedisConfig
+|-- integration
+|   |-- AbstractIntegrationTest
+|   |-- AuthControllerIT
+|   |-- TestHelper
+|   |-- TransferControllerIT
+|   |-- TransferFlowIT
+|   `-- WalletControllerIT
+|-- transaction/service
+|   `-- CreateTransactionServiceTest
+|-- transfer/service
+|   |-- GetTransferServiceTest
+|   `-- TransferAuthorizationServiceTest
+|-- user/controller
+|   `-- UserControllerTest
+|-- user/service
+|   |-- CreateUserServiceTest
+|   |-- DeleteUserServiceTest
+|   |-- GetUserServiceTest
+|   |-- PatchUserServiceTest
+|   |-- UpdatePasswordServiceTest
+|   `-- UpdateUserEmailServiceTest
+`-- wallet/service
+    |-- CreateWalletServiceTest
+    `-- GetWalletServiceTest
 ```
 
----
+## Current structural notes
 
-## 🚀 Infraestrutura
-
-### Docker Compose
-
-```yaml
-services:
-  - postgres: PostgreSQL 16
-  - zookeeper: Kafka dependency
-  - kafka: Apache Kafka 7.5
-  - payment-service: Application
-```
-
-### Configuração
-
-- **Database**: PostgreSQL 16 via JPA/Hibernate
-- **Migrations**: Flyway
-- **Message Broker**: Apache Kafka 7.5
-- **Actuator**: Health checks e metrics
-- **Build**: Maven
+- The project now uses an outbox table for transfer and wallet event publication. Old Spring event listener classes are no longer part of the design.
+- Topic design is split by event type instead of multiplexing several event classes on the same topic.
+- `user` exceptions use `exceptions`, while `transfer` and `wallet` use `exception`. The structure is intentionally documented as-is, not normalized.
+- `UserType` includes `ADMIN`, but there is no public endpoint in this service that creates admin users.

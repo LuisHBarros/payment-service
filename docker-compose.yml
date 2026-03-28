@@ -1,20 +1,18 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: payment-postgres
     environment:
-      POSTGRES_USER: payment_user
-      POSTGRES_PASSWORD: payment_pass
+      POSTGRES_USER: ${POSTGRES_USER:-payment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-payment_pass}
       POSTGRES_DB: payment_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U payment_user -d payment_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-payment_user} -d payment_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,6 +49,14 @@ services:
       - "9092:9092"
     networks:
       - payment-network
+    
+  redis:
+    image: redis:7-alpine
+    container_name: payment-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - payment-network
 
   # Payment Service Application
   payment-service:
@@ -63,19 +69,25 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      redis:
+        condition: service_started
     environment:
       # Database configuration
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
-      SPRING_DATASOURCE_USERNAME: payment_user
-      SPRING_DATASOURCE_PASSWORD: payment_pass
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-payment_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-payment_pass}
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SPRING_FLYWAY_ENABLED: "true"
-      
+
       # Kafka configuration
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      
+
+      # Redis configuration
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+
       # Application configuration
-      APP_CRYPTO_SECRET: ${APP_CRYPTO_SECRET:-default-secret-key-change-in-production}
+      APP_CRYPTO_SECRET: ${APP_CRYPTO_SECRET:-dev-only-secret-key-change-me}
     ports:
       - "8080:8080"
     networks:

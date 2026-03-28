@@ -1,6 +1,6 @@
 # payment-service
 
-API REST para gerenciamento de pagamentos com arquitetura baseada em eventos · Java 21 · Spring Boot 3
+API REST para gerenciamento de pagamentos com arquitetura baseada em eventos · Java 21 · Spring Boot 3 · JWT · Outbox Pattern
 
 ---
 
@@ -8,7 +8,7 @@ API REST para gerenciamento de pagamentos com arquitetura baseada em eventos · 
 
 O **payment-service** é uma API REST que gerencia usuários, carteiras digitais e transferências financeiras entre pessoas físicas (COMMON) e lojistas (MERCHANT), seguindo os princípios de **Domain-Driven Design (DDD)** e **Event-Driven Architecture (EDA)**.
 
-A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos de domínio, garantindo desacoplamento e escalabilidade. O fluxo de transferência implementa **lock pessimista determinístico**, **idempotência** e **retry com backoff** para garantir consistência em operações financeiras críticas.
+A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos de domínio, garantindo desacoplamento e escalabilidade. O padrão **Outbox** garante consistência entre o banco de dados e a publicação de eventos. O fluxo de transferência implementa **lock pessimista determinístico**, **idempotência** e **retry com backoff** para garantir consistência em operações financeiras críticas.
 
 | | |
 |---|---|
@@ -16,7 +16,8 @@ A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos d
 | **Framework** | Spring Boot 3.5 |
 | **Banco de dados** | PostgreSQL 16 |
 | **Mensageria** | Apache Kafka 7.5 |
-| **Segurança** | AES-256-CBC + BCrypt |
+| **Cache/Estado** | Redis 7 |
+| **Segurança** | AES-256-CBC + BCrypt + JWT |
 | **Validação** | Bean Validation + Value Objects |
 | **Build** | Maven |
 | **Migrações** | Flyway |
@@ -30,10 +31,11 @@ A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos d
 ```
 payment_service
 ├── shared          ← contratos, eventos, infraestrutura transversal
-├── user            ← cadastro e gestão de usuários
+├── user            ← cadastro, autenticação e gestão de usuários
 ├── wallet          ← carteiras digitais e processamento de transferências
 ├── transfer        ← orquestração de transferências
-└── transaction     ├── ledger imutável de movimentações
+├── transaction     ← ledger imutável de movimentações
+└── auth            ← autenticação JWT e autorização
 ```
 
 ### Estrutura do `shared`
@@ -57,13 +59,43 @@ shared
 │   ├── WalletCreditedEvent
 │   └── TransferStatusChangedEvent
 ├── kafka
-│   └── KafkaEventProducer
+│   ├── KafkaEventProducer
+│   └── OutboxPublisher
+├── outbox
+│   ├── OutboxEvent
+│   └── OutboxRepository
 ├── query
 │   ├── UserQueryService
 │   └── WalletQueryService
+├── security
+│   ├── JwtService
+│   └── SecurityUtils
 └── type
     └── TransferStatus
 ```
+
+---
+
+## 🔐 Módulo de Autenticação (Auth)
+
+Autenticação stateless baseada em JWT com invalidação de tokens via Redis.
+
+### Fluxo de Autenticação
+
+| Endpoint | Acesso | Descrição |
+|---|---|---|
+| `POST /api/v1/auth/login` | Público | Login com `identifier` (email ou CPF/CNPJ) e `password`. Retorna JWT e tempo de expiração. |
+| `POST /api/v1/auth/logout` | Autenticado | Revoga o token atual armazenando seu ID no Redis até a expiração natural. |
+
+### Características de Segurança
+
+| Recurso | Implementação |
+|---|---|
+| Token JWT | JJWT com chave HMAC Base64 |
+| Revogação | Redis com TTL igual ao tempo restante do token |
+| Rate Limiting | Bucket4j + Redis (por IP para endpoints públicos, por usuário para autenticados) |
+| Proteção de endpoints | Spring Security com anotações `@PreAuthorize` |
+| Verificação de propriedade | `SecurityUtils.requireOwnership()` em controllers |
 
 ---
 
@@ -75,6 +107,7 @@ shared
 |---|---|---|
 | `COMMON` | CPF (11 dígitos) | Envia e recebe transferências |
 | `MERCHANT` | CNPJ (14 dígitos) | Apenas recebe transferências |
+| `ADMIN` | - | Acesso total (não exposto em endpoints públicos) |
 
 ### Campos da entidade
 
@@ -82,7 +115,7 @@ shared
 |---|---|
 | `id` | UUID gerado automaticamente |
 | `name` | Nome completo ou razão social. Imutável após cadastro. |
-| `email` | E-mail único. Validado por regex. |
+| `email` | E-mail único. Validado por regex. Criptografado via JPA converter. |
 | `password` | Hash BCrypt. Nunca armazenada em texto plano. |
 | `document` | CPF ou CNPJ. Criptografado com AES-256-CBC. |
 | `document_hash` | SHA-256 do documento normalizado. Garante unicidade no banco. |
@@ -92,19 +125,19 @@ shared
 
 ### Endpoints
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `POST` | `/api/v1/users` | Cria usuário. Tipo derivado do documento. |
-| `GET` | `/api/v1/users` | Lista usuários com documento mascarado. |
-| `GET` | `/api/v1/users/{id}` | Retorna um usuário. |
-| `PATCH` | `/api/v1/users/{id}` | Atualiza e-mail e/ou senha. |
-| `DELETE` | `/api/v1/users/{id}` | Remove um usuário. |
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `POST` | `/api/v1/users` | Público | Cria usuário. Tipo derivado do documento. |
+| `GET` | `/api/v1/users` | `ADMIN` | Lista usuários com paginação. |
+| `GET` | `/api/v1/users/{id}` | Owner ou `ADMIN` | Retorna um usuário. |
+| `PATCH` | `/api/v1/users/{id}` | Owner ou `ADMIN` | Atualiza e-mail e/ou senha. |
+| `DELETE` | `/api/v1/users/{id}` | Owner ou `ADMIN` | Remove um usuário. |
 
 ### Evento publicado
 
 | Evento | Tópico | Trigger |
 |---|---|---|
-| `UserCreatedEvent` | `payment.users` | Após persistência do usuário |
+| `UserCreatedEvent` | `payment.users` | Após persistência do usuário (via Outbox) |
 
 ---
 
@@ -123,22 +156,22 @@ shared
 
 - Saldo nunca pode ser negativo após débito.
 - Carteira criada com saldo zero.
-- Toda movimentação gera um `WalletDebitedEvent` ou `WalletCreditedEvent`.
+- Toda movimentação gera um `WalletDebitedEvent` ou `WalletCreditedEvent` (via Outbox).
 
 ### Endpoints
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/v1/wallets/{userId}` | Retorna saldo e dados da carteira. |
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `GET` | `/api/v1/wallets/{userId}` | Owner ou `ADMIN` | Retorna saldo e dados da carteira. |
 
 ### Eventos consumidos e publicados
 
 | Direção | Evento | Tópico | Ação |
 |---|---|---|---|
 | Consome | `UserCreatedEvent` | `payment.users` | Cria a carteira |
-| Consome | `TransferCreatedEvent` | `payment.transfers` | Processa transferência |
-| Publica | `WalletDebitedEvent` | `payment.wallets` | Após débito |
-| Publica | `WalletCreditedEvent` | `payment.wallets` | Após crédito |
+| Consome | `TransferCreatedEvent` | `payment.transfer.created` | Processa transferência |
+| Publica | `WalletDebitedEvent` | `payment.wallet.debits` | Após débito (via Outbox) |
+| Publica | `WalletCreditedEvent` | `payment.wallet.credits` | Após crédito (via Outbox) |
 
 ---
 
@@ -163,41 +196,47 @@ Orquestra o fluxo completo de transferência entre usuários. Apenas `COMMON` po
 1. POST /api/v1/transfers
    → CreateTransferService.authorize()
    → Cria TransferEntity com status PENDING
-   → Publica TransferCreatedEvent (Spring Event)
+   → Escreve TRANSFER_CREATED na tabela outbox
 
-2. TransferCreatedListener (após commit)
-   → TransferPublishService.publish()
+2. OutboxPublisher (polling a cada 500ms)
    → Publica TransferCreatedEvent no Kafka (retry 3x)
+   → Marca outbox como processado ou incrementa tentativas
 
 3. TransferWalletConsumer (Kafka)
    → ProcessTransferService.execute()
    → Lock pessimista determinístico (menor UUID primeiro)
    → Débito e crédito atômicos
-   → Publica WalletDebitedEvent e WalletCreditedEvent
+   → Escreve WALLET_DEBITED e WALLET_CREDITED na outbox
    → Marca transferência como processada (idempotência)
 
-4. TransferConsumer (Kafka)
+4. OutboxPublisher
+   → Publica WalletDebitedEvent e WalletCreditedEvent
+
+5. transaction.TransferConsumer (Kafka)
    → CreateTransactionService.executeDebit()
    → CreateTransactionService.executeCredit()
-   → Publica TransferStatusChangedEvent (COMPLETED)
+   → Escreve TRANSFER_STATUS_CHANGED na outbox (COMPLETED)
 
-5. TransferStatusConsumer (Kafka)
+6. OutboxPublisher
+   → Publica TransferStatusChangedEvent
+
+7. TransferStatusConsumer (Kafka)
    → Atualiza TransferEntity com status final (idempotência)
 ```
 
 ### Endpoints
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `POST` | `/api/v1/transfers` | Inicia uma transferência. |
-| `GET` | `/api/v1/transfers?walletId=` | Lista transferências da carteira (paginado, ordenado por `createdAt` DESC). |
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `POST` | `/api/v1/transfers` | `COMMON` ou `ADMIN` | Inicia uma transferência. Verifica propriedade da carteira origem. |
+| `GET` | `/api/v1/transfers?walletId=` | Owner ou `ADMIN` | Lista transferências da carteira (paginado, ordenado por `createdAt` DESC). |
 
 ### Eventos publicados e consumidos
 
 | Direção | Evento | Tópico | Ação |
 |---|---|---|---|
-| Publica | `TransferCreatedEvent` | `payment.transfers` | Ao criar transferência (via Kafka) |
-| Consome | `TransferStatusChangedEvent` | `payment.transfers` | Atualiza status final |
+| Publica | `TransferCreatedEvent` | `payment.transfer.created` | Ao criar transferência (via Outbox) |
+| Consome | `TransferStatusChangedEvent` | `payment.transfer.status` | Atualiza status final |
 
 ---
 
@@ -239,9 +278,31 @@ Cada transferência bem-sucedida gera exatamente duas `Transaction`: `DEBIT` no 
 
 | Direção | Evento | Tópico | Ação |
 |---|---|---|---|
-| Consome | `WalletDebitedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `DEBIT` |
-| Consome | `WalletCreditedEvent` | `payment.wallets` | Persiste `TransactionEntity` tipo `CREDIT` |
-| Publica | `TransferStatusChangedEvent` | `payment.transfers` | Ao completar ou falhar |
+| Consome | `WalletDebitedEvent` | `payment.wallet.debits` | Persiste `TransactionEntity` tipo `DEBIT` |
+| Consome | `WalletCreditedEvent` | `payment.wallet.credits` | Persiste `TransactionEntity` tipo `CREDIT` |
+| Publica | `TransferStatusChangedEvent` | `payment.transfer.status` | Ao completar ou falhar (via Outbox) |
+
+---
+
+## 📦 Outbox Pattern
+
+O serviço utiliza uma tabela `outbox` para garantir consistência entre o banco de dados transacional e a publicação de eventos Kafka.
+
+### Comportamento
+
+| Aspecto | Configuração |
+|---|---|
+| Polling interval | 500 ms (padrão) |
+| Retry máximo | 10 tentativas |
+| Cleanup | Linhas processadas removidas periodicamente |
+| Recovery | Transferência marcada como `FAILED` se `TRANSFER_CREATED` não puder ser publicado |
+
+### Fluxo
+
+1. Serviço de negócio persiste dados de negócio + insere evento na `outbox` (mesma transação)
+2. `OutboxPublisher` consome eventos pendentes e publica no Kafka
+3. Em caso de sucesso, marca outbox como processado
+4. Em caso de falha, incrementa tentativas; após 10 falhas, aplica lógica de recovery
 
 ---
 
@@ -251,20 +312,17 @@ Cada transferência bem-sucedida gera exatamente duas `Transaction`: `DEBIT` no 
 
 | Tópico | DLT | Produzido por | Consumido por |
 |---|---|---|---|
-| `payment.users` | `payment.users.DLT` | `CreateUserService` | `CreateWalletConsumer` |
-| `payment.wallets` | `payment.wallets.DLT` | `ProcessTransferService` | `TransferConsumer` |
-| `payment.transfers` | `payment.transfers.DLT` | `TransferPublishService`, `TransferConsumer` | `TransferWalletConsumer`, `TransferStatusConsumer` |
+| `payment.users` | `payment.users.DLT` | `CreateUserService` (via Outbox) | `CreateWalletConsumer` |
+| `payment.wallet.debits` | `payment.wallet.debits.DLT` | `ProcessTransferService` (via Outbox) | `TransferConsumer` (transaction) |
+| `payment.wallet.credits` | `payment.wallet.credits.DLT` | `ProcessTransferService` (via Outbox) | `TransferConsumer` (transaction) |
+| `payment.transfer.created` | `payment.transfer.created.DLT` | `OutboxPublisher` | `TransferWalletConsumer` |
+| `payment.transfer.status` | `payment.transfer.status.DLT` | `TransferConsumer` (via Outbox) | `TransferStatusConsumer` |
 
 ### Configuração de erros
 
 Cada consumer está configurado com `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`:
-- 3 tentativas com intervalo de 1 segundo
+- 3 tentativas com intervalo fixo de 1 segundo
 - Após esgotar tentativas, mensagem enviada ao DLT correspondente
-
-### Retry
-
-- `TransferPublishService`: 3 tentativas com backoff exponencial (1s, 2s, 4s)
-- `@Recover`: Publica status FAILED ao esgotar tentativas
 
 ---
 
@@ -292,7 +350,14 @@ UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
 |---|---|
 | `wallet` | `ProcessedTransferRepository` - marca transferência como processada |
 | `transfer` | Verifica status antes de atualizar `TransferEntity` |
-| `transaction` | (Future) Verifica se já existe `TransactionEntity` com mesmo `transferId` e `type` |
+| `transaction` | Verifica se já existe `TransactionEntity` com mesmo `transferId` e `type` |
+
+### Rate Limiting
+
+| Endpoint Tipo | Estratégia |
+|---|---|
+| Público (`/api/v1/auth/login`, `/api/v1/users`) | Por IP via Bucket4j + Redis |
+| Autenticado | Por usuário autenticado |
 
 ---
 
@@ -304,6 +369,16 @@ UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
 - Maven 3.8+
 - Docker e Docker Compose
 
+### Variáveis de Ambiente
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `APP_CRYPTO_SECRET` | Sim | Chave de 32 caracteres para `AesEncryptor` |
+| `JWT_SECRET` | Sim | Chave HMAC Base64 para JJWT |
+| `SPRING_REDIS_HOST` | Não | Padrão: `localhost` |
+| `SPRING_REDIS_PORT` | Não | Padrão: `6379` |
+| `RATE_LIMIT_ENABLED` | Não | Padrão: `true` |
+
 ### Setup Local
 
 ```bash
@@ -311,40 +386,36 @@ UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
 git clone <repository-url>
 cd payment-service
 
-# Configure a secret de criptografia
+# Inicie apenas a infraestrutura
+docker compose up -d postgres zookeeper kafka redis
+
+# Configure as secrets e execute
 export APP_CRYPTO_SECRET="your-secret-key-32-characters"
-
-# Inicie os serviços (PostgreSQL, Kafka, Payment Service)
-docker-compose up -d
-
-# Verifique os logs
-docker-compose logs -f payment-service
-
-# A aplicação estará disponível em http://localhost:8080
+export JWT_SECRET="<base64-encoded-hmac-key>"
+./mvnw spring-boot:run
 ```
+
+### Executar com Docker Compose (Full Stack)
+
+> **Nota:** Adicione `JWT_SECRET` à seção `payment-service.environment` no `docker-compose.yml` para startup com auth habilitado.
+
+```bash
+docker compose up --build
+```
+
+A aplicação estará disponível em http://localhost:8080
 
 ### Executar Testes
 
 ```bash
-# Executar todos os testes
-mvn test
+# Unit tests
+./mvnw test
 
-# Executar com cobertura
-mvn test jacoco:report
-```
+# Integration tests com Testcontainers
+./mvnw verify
 
-### Build e Deploy
-
-```bash
-# Build JAR
-mvn clean package
-
-# Build Docker image
-docker build -t payment-service:latest .
-
-# Push para registry
-docker tag payment-service:latest <registry>/payment-service:latest
-docker push <registry>/payment-service:latest
+# Com cobertura
+./mvnw test jacoco:report
 ```
 
 ---
@@ -370,7 +441,10 @@ curl http://localhost:8080/actuator/metrics
 docker exec -it payment-kafka kafka-topics --bootstrap-server localhost:9092 --list
 
 # Consumir mensagens de um tópico
-docker exec -it payment-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic payment.transfers --from-beginning
+docker exec -it payment-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic payment.transfer.created \
+  --from-beginning
 ```
 
 ---
@@ -389,8 +463,9 @@ docker exec -it payment-kafka kafka-console-consumer --bootstrap-server localhos
 | `UserSummary` e `WalletSummary` em `shared` | Contratos de leitura transversais sem vazar entidades entre contextos. |
 | `TransferStatus` em `shared.type` | Usado em eventos e em múltiplos contextos — sem dono único. |
 | Lock pessimista determinístico | Previne deadlocks ao garantir ordem total de locks entre carteiras. |
-| Spring Events + Kafka | Spring Events para comunicação síncrona intra-contexto, Kafka para comunicação assíncrona inter-contexto. |
-| Retry com backoff | 3 tentativas com delay progressivo (1s, 2s, 4s) para lidar com falhas transitórias. |
+| Outbox Pattern | Garante consistência entre persistência transacional e publicação Kafka. |
+| JWT + Redis | Autenticação stateless com capacidade de revogação imediata. |
+| Rate Limiting distribuído | Bucket4j + Redis protege contra abuse em ambiente multi-instância. |
 | DLT por tópico | Mensagens com falha são isoladas sem bloquear o consumo do tópico principal. |
 
 ---
@@ -410,10 +485,29 @@ curl -X POST http://localhost:8080/api/v1/users \
   }'
 ```
 
+### Login
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "joao@example.com",
+    "password": "SecurePass123!"
+  }'
+```
+
+### Consultar Carteira
+
+```bash
+curl http://localhost:8080/api/v1/wallets/<user-uuid> \
+  -H "Authorization: Bearer <jwt>"
+```
+
 ### Criar Transferência
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/transfers \
+  -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
   -d '{
     "sourceWalletId": "<source-wallet-uuid>",
@@ -425,13 +519,15 @@ curl -X POST http://localhost:8080/api/v1/transfers \
 ### Listar Transferências
 
 ```bash
-curl "http://localhost:8080/api/v1/transfers?walletId=<wallet-uuid>&page=0&size=20"
+curl "http://localhost:8080/api/v1/transfers?walletId=<wallet-uuid>&page=0&size=20" \
+  -H "Authorization: Bearer <jwt>"
 ```
 
-### Consultar Saldo
+### Logout
 
 ```bash
-curl http://localhost:8080/api/v1/wallets/<user-uuid>
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H "Authorization: Bearer <jwt>"
 ```
 
 ---

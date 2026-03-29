@@ -8,7 +8,7 @@ Registro de decisões técnicas tomadas durante o desenvolvimento do payment-ser
 
 ### 1. Comunicação entre Contextos via Kafka
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Inicialmente, o projeto tinha chamadas diretas entre contextos (`User → Wallet`, `Transfer → Wallet`), violando o princípio de isolamento do DDD.
@@ -33,7 +33,7 @@ Substituir todas as chamadas diretas por eventos Kafka para garantir desacoplame
 
 ### 2. Lock Pessimista Determinístico
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Com a migração para eventos assíncronos, era necessário evitar race conditions e deadlocks em transferências concorrentes.
@@ -67,7 +67,7 @@ UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
 
 ### 3. Idempotência em Processamento de Transferências
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Com retry e reprocessamento de mensagens Kafka, era essencial evitar processamento duplicado de transferências.
@@ -97,7 +97,7 @@ processedTransferRepository.save(processedTransfer);
 
 ### 4. Idempotência em Atualizações de Status
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Consumidores de `TransferStatusChangedEvent` poderiam receber eventos duplicados, causando atualizações redundantes.
@@ -128,7 +128,7 @@ if (transfer.getStatus() != event.status()) {
 
 ### 5. Retry com Backoff Exponencial
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Falhas transitórias (Kafka unavailable, timeout) poderiam causar falha de transferência permanentemente.
@@ -163,7 +163,7 @@ public void recover(Exception e, TransferCreatedEvent event) {
 
 ### 6. Arquitetura Híbrida: Spring Events + Kafka
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Precisava garantir que eventos fossem publicados apenas após commit da transação, mas também wanted comunicação assíncrona entre contextos.
@@ -197,7 +197,7 @@ public void handle(TransferCreatedEvent event) {
 
 ### 7. Remoção de Serviços Diretos de Wallet
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 `CreditWalletService` e `DebitWalletService` eram chamados diretamente pelo contexto `Transfer`, criando acoplamento forte.
@@ -220,7 +220,7 @@ Remover serviços diretos e substituir por fluxo baseado em eventos via `Process
 
 ### 8. Dead Letter Topics (DLT)
 
-**Status:** ✅ Implementado (2025)
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
 Mensagens com falha permanente bloqueavam o consumo do tópico principal.
@@ -343,10 +343,10 @@ Inicialmente foi considerado lock otimista via `@Version` para evitar conflitos.
 
 | Mês | Mudança Principal | Impacto |
 |---|---|---|
-| 2025-01 | Implementação base com DDD | Contextos isolados, value objects |
-| 2025-02 | Migração para Kafka | Desacoplamento completo entre contextos |
-| 2025-03 | Lock pessimista + idempotência | Consistência em transferências concorrentes |
-| 2025-03 | Retry + DLT | Resiliência em cenários de falha |
+| 2026-01 | Implementação base com DDD | Contextos isolados, value objects |
+| 2026-02 | Migração para Kafka | Desacoplamento completo entre contextos |
+| 2026-03 | Lock pessimista + idempotência | Consistência em transferências concorrentes |
+| 2026-03 | Retry + DLT | Resiliência em cenários de falha |
 
 ---
 

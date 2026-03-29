@@ -319,6 +319,35 @@ Gerencia o processo de depósito em carteiras digitais através de integração 
 | `STRIPE` | ✅ Implementado |
 | Outros | 🔌 Extensível |
 
+### Configuração do Webhook Stripe
+
+Para processar pagamentos automaticamente, é necessário configurar o webhook no dashboard do Stripe:
+
+#### Passos para configurar o webhook:
+
+1. Acesse o [Stripe Dashboard](https://dashboard.stripe.com/test/webhooks)
+2. Clique em "Add endpoint"
+3. Configure os seguintes parâmetros:
+   - **Endpoint URL**: `http://localhost:8080/api/v1/webhooks/deposits` (ou o domínio de produção)
+   - **Events to send**: Selecione:
+     - `payment_intent.succeeded`
+     - `payment_intent.payment_failed`
+     - `payment_intent.canceled`
+4. Clique em "Add endpoint"
+5. Copie o **Signing Secret** gerado
+6. Atualize a variável de ambiente `PAYMENT_WEBHOOK_SECRET` no arquivo `.env`
+
+#### Variáveis de ambiente necessárias:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+PAYMENT_PROVIDER=STRIPE
+PAYMENT_WEBHOOK_SECRET=whsec_...
+PAYMENT_WEBHOOK_HEADER_NAME=Stripe-Signature
+```
+
+**Nota:** O endpoint `/api/v1/webhooks/deposits` verifica a assinatura do webhook antes de processar qualquer evento, garantindo que apenas webhooks legítimos do Stripe sejam aceitos.
+
 ---
 
 ## 📜 Módulo de Transações (Transaction)

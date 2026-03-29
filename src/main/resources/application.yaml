@@ -51,6 +51,13 @@ management:
     tags:
       application: payment-service    # tag global em todas as métricas
 
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+
+payment:
+  provider: ${PAYMENT_PROVIDER:STRIPE}
+  webhook-secret: ${PAYMENT_WEBHOOK_SECRET}
+  webhook-header-name: ${PAYMENT_WEBHOOK_HEADER_NAME:Stripe-Signature}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -94,4 +101,8 @@ rate-limit:
     GET:/api/v1/transfers:
       capacity: 30
       refill-tokens: 30
+      period-milliseconds: 60000
+    POST:/api/v1/webhooks/deposits:
+      capacity: 1000
+      refill-tokens: 1000
       period-milliseconds: 60000

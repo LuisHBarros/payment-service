@@ -368,10 +368,9 @@ Gerencia depósitos em carteiras digitais via integração com provedores de pag
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| `POST` | `/api/v1/deposits` | Autenticado | Cria um depósito e retorna URL de checkout. |
-| `POST` | `/api/v1/deposits/webhook` | Público (assinatura verificada) | Recebe webhooks dos provedores de pagamento. |
-| `GET` | `/api/v1/deposits/{id}` | Owner ou `ADMIN` | Retorna detalhes de um depósito. |
-| `GET` | `/api/v1/deposits?walletId=` | Owner ou `ADMIN` | Lista depósitos da carteira (paginado, ordenado por `createdAt` DESC). |
+| `POST` | `/api/v1/wallets/{userId}/deposits` | Owner | Cria um depósito e retorna URL de checkout. |
+| `GET` | `/api/v1/wallets/{userId}/deposits` | Owner | Lista depósitos do usuário. |
+| `POST` | `/api/v1/webhooks/deposits` | Público (assinatura verificada) | Recebe webhooks dos provedores de pagamento. |
 
 #### Eventos
 
@@ -713,14 +712,20 @@ curl "http://localhost:8080/api/v1/transfers?walletId=<wallet-uuid>&page=0&size=
 ### Criar Depósito
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/deposits \
+curl -X POST http://localhost:8080/api/v1/wallets/<user-uuid>/deposits \
   -H "Authorization: Bearer <jwt>" \
   -H "Content-Type: application/json" \
   -d '{
-    "walletId": "<wallet-uuid>",
     "amount": 500.00,
     "paymentProvider": "STRIPE"
   }'
+```
+
+### Listar Depósitos
+
+```bash
+curl http://localhost:8080/api/v1/wallets/<user-uuid>/deposits \
+  -H "Authorization: Bearer <jwt>"
 ```
 
 ### Logout

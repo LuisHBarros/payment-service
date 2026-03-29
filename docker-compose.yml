@@ -94,6 +94,9 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
 
+      # OpenTelemetry configuration
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}
+
       # Application configuration
       APP_CRYPTO_SECRET: ${APP_CRYPTO_SECRET:-dev-only-secret-key-change-me}
       JWT_SECRET: ${JWT_SECRET}

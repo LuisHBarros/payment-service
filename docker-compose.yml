@@ -104,7 +104,8 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     networks:
@@ -118,6 +119,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
     networks:
@@ -125,6 +128,8 @@ services:
 
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   payment-network:

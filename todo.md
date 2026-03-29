@@ -1,98 +1,105 @@
-# Project TODO - Payment Service
+# TODO do Projeto - Payment Service
 
-Last updated: 2026-03-29
+Última atualização: 2026-03-29
 
-## Recently Completed
+## Concluídos Recentemente
 
-- Implemented JWT authentication and Redis-backed token blacklist for logout.
-- Added ownership checks and role-based authorization across user, wallet, and transfer endpoints.
-- Added rate limiting with Bucket4j + Redis for public and authenticated routes.
-- Added `GlobalExceptionHandler` and replaced raw runtime failures with domain exceptions where already identified.
-- Implemented the outbox pattern for Kafka publishing, including polling, retry limits, and cleanup.
-- Added Flyway migration `V1__init_schema.sql` for the initial schema and indexes.
-- Added pagination for `GET /api/v1/users`.
-- Renamed `TransactionController` to `TransferController`.
-- Added Docker-related cleanup: `.dockerignore` and externalized compose credentials.
-- Added GitHub Actions CI at `.github/workflows/ci.yml`.
-- Added integration-test scaffolding with Testcontainers:
+- Autenticação JWT com blacklist de tokens no Redis para logout.
+- Verificação de ownership e autorização por papel em endpoints de user, wallet e transfer.
+- Rate limiting com Bucket4j + Redis para rotas públicas e autenticadas.
+- `GlobalExceptionHandler` e substituição de falhas brutas por exceções de domínio.
+- Padrão outbox para publicação Kafka, com polling, limite de retries e limpeza.
+- Migração Flyway `V1__init_schema.sql` para schema e índices iniciais.
+- Paginação em `GET /api/v1/users`.
+- Renomeação de `TransactionController` para `TransferController`.
+- Limpeza Docker: `.dockerignore` e credenciais do compose externalizadas.
+- CI com GitHub Actions em `.github/workflows/ci.yml`.
+- Scaffolding de testes de integração com Testcontainers:
   `AuthControllerIT`, `TransferControllerIT`, `TransferFlowIT`, `WalletControllerIT`.
-- Kafka producer now handles async send results with `.whenComplete(...)` logging.
-- Kafka consumers are now split by event type/topic instead of relying on shared-topic branching.
-- `RateLimitProperties.getEndpointLimit(...)` now returns `null` for unmapped routes.
-- `@Transactional` usage is now consistently Spring-based.
-- Implemented deposit module with payment provider integration (Stripe).
-- Added webhook signature verification for payment providers.
-- Created observability stack with Prometheus and Grafana.
-- Added custom metrics for transfers, deposits, and wallet operations.
-- Implemented JSON structured logging with Logback.
-- Added database seeding and load testing scripts.
-- Implemented transaction ledger query endpoints (`GET /api/v1/transactions`) with pagination, filters (walletId, transferId, type, date range), and ownership checks.
+- Kafka producer com tratamento de envio async via `.whenComplete(...)`.
+- Kafka consumers separados por tipo de evento/tópico em vez de branching em tópico compartilhado.
+- `RateLimitProperties.getEndpointLimit(...)` retorna `null` para rotas sem mapeamento.
+- Uso de `@Transactional` consistente com Spring.
+- Módulo de depósito com integração de payment provider (Stripe).
+- Verificação de assinatura de webhook para payment providers.
+- Stack de observabilidade com Prometheus e Grafana.
+- Métricas customizadas para transfers, depósitos e operações de wallet.
+- Dashboards Grafana customizados (Business, API, Infra) com provisioning automático.
+- Prometheus com scrape interval de 30s e volumes persistentes.
+- Logging estruturado em JSON com Logback.
+- Scripts de seeding e load testing do banco.
+- Endpoints de ledger de transações (`GET /api/v1/transactions`) com paginação, filtros (walletId, transferId, tipo, intervalo de datas) e verificação de ownership.
+- Configuração CORS via `CorsConfigurationSource` em `SecurityConfig.java`.
 
 ---
 
-## Critical Issues
+## Problemas Críticos
 
-No unresolved critical issues.
-
----
-
-## High Priority
-
-| # | Issue | Status | Notes |
-|---|-------|--------|-------|
-| 1 | Missing CORS configuration | OPEN | No `CorsConfigurationSource`, `@CrossOrigin`, or MVC CORS config is present |
-| 2 | Auth/security test coverage is still incomplete | OPEN | `AuthControllerIT` exists, but there are still no direct tests for `JwtService`, `JwtAuthenticationFilter`, `RateLimitFilter`, or `SecurityUtils` |
-| 3 | Kafka consumer and outbox flow tests are still missing | OPEN | No focused tests for `TransferConsumer`, `TransferStatusConsumer`, `TransferWalletConsumer`, `DepositConsumer`, or `OutboxPublisher` |
-| 4 | CI only runs `mvn test` | OPEN | `.github/workflows/ci.yml` does not run `mvn verify`, so integration tests are not exercised in GitHub Actions |
-| 5 | Deposit webhook security needs validation | OPEN | Webhook signature verification exists but needs more thorough testing |
-| 6 | Payment provider error handling needs improvement | OPEN | Better recovery strategies for failed payment provider calls |
+Nenhum problema crítico em aberto.
 
 ---
 
-## Medium Priority
+## Alta Prioridade
 
-| # | Issue | Status | Notes |
-|---|-------|--------|-------|
-| 5 | Password rules are still weak | OPEN | `Password` only enforces non-blank plus minimum length of 5 |
-| 6 | `AesEncryptor` still uses AES-CBC | OPEN | Consider AES-GCM for authenticated encryption |
-| 7 | `AesEncryptor` still uses platform-default charset | OPEN | `secret.getBytes()` and `plainText.getBytes()` should use `StandardCharsets.UTF_8` |
-| 8 | Mixed dependency-injection styles across services/controllers | OPEN | The codebase still mixes explicit constructors and Lombok `@RequiredArgsConstructor` |
-| 9 | Exception package naming is inconsistent | OPEN | `user.exceptions` vs `transfer.exception` / `wallet.exception` |
-| 10 | `TransferAuthorizationServiceTest` naming/formatting needs cleanup | OPEN | Test names are reasonable now, but formatting is inconsistent and readability is still weak |
-| 11 | Retry/backoff values are still partly hardcoded | OPEN | Example: Kafka consumer retry settings are still embedded in config code/comments |
-| 12 | Additional payment providers needed | OPEN | Currently only Stripe is implemented; consider PayPal, Mercado Pago, etc. |
-| 13 | Grafana dashboards need customization | OPEN | Default dashboards are functional but could be improved for better insights |
-| 14 | Prometheus scrape interval configuration | OPEN | Default interval may not be optimal for all environments |
-| 15 | Deposit notification system | OPEN | Users should be notified when deposits complete or fail |
+| # | Issue | Status | Observações |
+|---|-------|--------|-------------|
+| 1 | Configuração CORS ausente | **RESOLVIDO** | `CorsConfigurationSource` em `SecurityConfig.java:67-77` com origins `localhost:3000/3333` |
+| 2 | Cobertura de testes de auth/security incompleta | ABERTO | Sem testes dedicados para `JwtService`, `JwtAuthenticationFilter`, `RateLimitFilter` e `SecurityUtils` |
+| 3 | Testes de Kafka consumer e outbox ausentes | **PARCIAL** | `TransferFlowIT` cobre consumers indiretamente, mas `DepositConsumer` e `OutboxPublisher` não têm testes diretos |
+| 4 | CI executa apenas `mvn test` | ABERTO | `.github/workflows/ci.yml` ainda usa `mvn test -B`; integration tests (failsafe) não rodam no CI |
+| 5 | Segurança do webhook de depósito | **RESOLVIDO** | 6 testes em 2 arquivos cobrem cenários de assinatura válida, inválida e evento não suportado |
+| 6 | Tratamento de erros do payment provider | ABERTO | `@EnableRetry` declarado sem `@Retryable`; sem circuit breaker; sem fallback provider |
 
 ---
 
-## Test Coverage Snapshot
+## Média Prioridade
 
-| Area | Status | Notes |
-|------|--------|-------|
-| user services | GOOD | Existing unit tests cover core user service flows |
-| wallet services | GOOD | Core wallet retrieval/creation logic is covered |
-| transfer services | GOOD | `GetTransferServiceTest` and `TransferAuthorizationServiceTest` exist |
-| deposit services | MODERATE | Basic tests for deposit creation and processing exist |
-| auth | MODERATE | `AuthControllerIT` exists, but lower-level JWT/filter coverage is missing |
-| controller integration | MODERATE | Basic integration suite exists for auth, transfers, wallet, and happy-path flow |
-| payment providers | MODERATE | Tests for Stripe payment provider exist |
-| Kafka consumers | LOW | No dedicated listener tests |
-| Kafka producer / outbox | LOW | No direct tests for producer callback behavior or outbox polling/cleanup |
-| rate limiting | LOW | No focused tests for throttling behavior |
-| authorization helpers | LOW | No direct tests for `SecurityUtils` ownership checks |
-| observability | LOW | No tests for metrics collection and logging |
+| # | Issue | Status | Observações |
+|---|-------|--------|-------------|
+| 7 | Regras de senha fracas | ABERTO | `Password` só exige não vazio + mínimo de 5 caracteres, sem complexidade |
+| 8 | `AesEncryptor` usa AES-CBC | ABERTO | Considerar AES-GCM para criptografia autenticada |
+| 9 | `AesEncryptor` usa charset padrão da plataforma | ABERTO | 3 chamadas `getBytes()`/`new String()` sem `StandardCharsets.UTF_8` |
+| 10 | Estilos de injeção de dependência mistos | ABERTO | Módulo `user` + 2 serviços de wallet usam construtor explícito; resto usa `@RequiredArgsConstructor` |
+| 11 | Nomenclatura inconsistente de pacotes de exceção | ABERTO | `user.exceptions` (plural) vs `transfer.exception`/`wallet.exception`/`transaction.exception` (singular) |
+| 12 | `TransferAuthorizationServiceTest` precisa de limpeza | ABERTO | Nomes OK, mas formatação/indentação inconsistentes |
+| 13 | Valores de retry/backoff ainda parcialmente hardcodados | ABERTO | `FixedBackOff(1000L, 3)` em `KafkaConsumerConfig.java:50` |
+| 14 | Provedores de pagamento adicionais necessários | ABERTO | Somente Stripe implementado; considerar PayPal, Mercado Pago, etc. |
+| 15 | Dashboards Grafana precisam de customização | **RESOLVIDO** | 3 dashboards versionados: business-metrics, application-api, infrastructure-jvm; provisioning config em `grafana/provisioning/dashboards/` |
+| 16 | Intervalo de scrape do Prometheus | **RESOLVIDO** | `prometheus.yml` com `scrape_interval: 30s`, `scrape_timeout: 10s`, `evaluation_interval: 30s` |
+| 17 | Sistema de notificação de depósitos | ABERTO | Nenhum serviço de notificação encontrado (email, push, etc.) |
 
 ---
 
-## Next Recommended Work
+## Snapshot de Cobertura de Testes
 
-1. Add CORS configuration and document the allowed origins strategy.
-2. Add focused tests for JWT auth, rate limiting, ownership checks, and Kafka listeners.
-3. Change CI from `mvn test` to `mvn verify` so integration tests run in GitHub Actions.
-4. Improve deposit webhook security validation and testing.
-5. Enhance payment provider error handling and recovery strategies.
-6. Implement additional payment providers (PayPal, Mercado Pago, etc.).
-7. Customize Grafana dashboards for better insights.
-8. Implement deposit notification system (email, push, etc.).
+| Área | Status | Observações |
+|------|--------|-------------|
+| user services | BOM | Testes unitários cobrem fluxos principais |
+| wallet services | BOM | Lógica de criação/busca de wallet coberta |
+| transfer services | BOM | `GetTransferServiceTest` e `TransferAuthorizationServiceTest` existem |
+| deposit services | MODERADO | Testes básicos de criação e processamento de depósito existem |
+| auth | MODERADO | `AuthControllerIT` existe, mas cobertura de JWT/filter é ausente |
+| controllers (integração) | MODERADO | Suite básica para auth, transfers, wallet e fluxo feliz |
+| payment providers | MODERADO | Testes para Stripe existem |
+| Kafka consumers | BAIXO | Sem testes dedicados para listeners |
+| Kafka producer / outbox | BAIXO | Sem testes diretos para callback de producer ou polling/limpeza de outbox |
+| rate limiting | BAIXO | Sem testes focados em throttling |
+| helpers de autorização | BAIXO | Sem testes diretos para checagens de ownership em `SecurityUtils` |
+| observabilidade | BAIXO | Sem testes para coleta de métricas e logging |
+
+---
+
+## Próximos Passos Recomendados
+
+1. Adicionar testes focados para JWT auth, rate limiting, checagens de ownership e listeners Kafka.
+2. Alterar CI de `mvn test` para `mvn verify` para que integration tests rodem no GitHub Actions.
+3. Implementar retry/circuit breaker para chamadas ao payment provider (`@Retryable` já habilitado mas não utilizado).
+4. Melhorar tratamento de erros e estratégias de recuperação do payment provider.
+5. Refatorar `AesEncryptor` para AES-GCM com `StandardCharsets.UTF_8`.
+6. Padronizar nomenclatura de pacotes de exceção (`user.exceptions` → `user.exception`).
+7. Padronizar estilo de injeção de dependência (escolher entre construtor explícito ou `@RequiredArgsConstructor`).
+8. Fortalecer regras de senha (complexidade, mínimo de caracteres).
+9. Externalizar valores de retry/backoff do Kafka consumer para `application.yaml`.
+10. Implementar provedores de pagamento adicionais (PayPal, Mercado Pago, etc.).
+11. Customizar dashboards Grafana e intervalo de scrape do Prometheus.
+12. Implementar sistema de notificação de depósitos (email, push, etc.).

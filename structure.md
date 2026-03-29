@@ -24,7 +24,9 @@ com.payment.payment_service
 |   |-- RateLimitFilter
 |   |-- RateLimitProperties
 |   |-- SecurityConfig
-|   `-- SecurityUtils
+|   |-- SecurityUtils
+|   `-- payment
+|       `-- StripeConfig
 |
 |-- shared
 |   |-- config
@@ -40,6 +42,7 @@ com.payment.payment_service
 |   |   |-- BaseEntity
 |   |   `-- OutboxEntity
 |   |-- event
+|   |   |-- DepositCompletedEvent
 |   |   |-- TransferStatusChangedEvent
 |   |   |-- UserCreatedEvent
 |   |   |-- WalletCreditedEvent
@@ -47,6 +50,8 @@ com.payment.payment_service
 |   |-- kafka
 |   |   |-- KafkaEventProducer
 |   |   `-- OutboxPublisher
+|   |-- metrics
+|   |   `-- PaymentMetrics
 |   |-- query
 |   |   |-- UserQueryService
 |   |   `-- WalletQueryService
@@ -94,24 +99,42 @@ com.payment.payment_service
 |   |   |-- CreateWalletConsumer
 |   |   `-- TransferWalletConsumer
 |   |-- controller
+|   |   |-- DepositController
 |   |   `-- WalletController
 |   |-- dto
+|   |   |-- CreateDepositRequestDTO
+|   |   |-- DepositResponseDTO
 |   |   `-- WalletResponseDTO
 |   |-- entity
+|   |   |-- DepositEntity
 |   |   |-- ProcessedTransferEntity
 |   |   `-- WalletEntity
 |   |-- exception
 |   |   |-- InsufficientBalanceException
+|   |   |-- InvalidPaymentProviderException
+|   |   |-- PaymentProviderException
 |   |   |-- WalletAlreadyExistsException
-|   |   `-- WalletNotFoundException
+|   |   |-- WalletNotFoundException
+|   |   `-- WebhookSignatureException
+|   |-- provider
+|   |   |-- PaymentProvider
+|   |   |-- PaymentProviderResponse
+|   |   |-- StripePaymentProvider
+|   |   `-- WebhookResult
 |   |-- repository
+|   |   |-- DepositRepository
 |   |   |-- ProcessedTransferRepository
 |   |   `-- WalletRepository
-|   `-- service
-|       |-- CreateWalletService
-|       |-- GetWalletService
-|       |-- ProcessTransferService
-|       `-- WalletQueryServiceImpl
+|   |-- service
+|   |   |-- CreateDepositService
+|   |   |-- CreateWalletService
+|   |   |-- GetWalletService
+|   |   |-- ProcessDepositService
+|   |   |-- ProcessTransferService
+|   |   `-- WalletQueryServiceImpl
+|   `-- type
+|       |-- DepositStatus
+|       `-- PaymentProviderName
 |
 |-- transfer
 |   |-- consumer
@@ -139,6 +162,7 @@ com.payment.payment_service
 |
 |-- transaction
 |   |-- consumer
+|   |   |-- DepositConsumer
 |   |   `-- TransferConsumer
 |   |-- entity
 |   |   `-- TransactionEntity
@@ -150,6 +174,10 @@ com.payment.payment_service
 |       `-- TransactionType
 |
 `-- PaymentServiceApplication
+|
+`-- deposit (module - implemented within wallet)
+    |-- consumer
+    |   `-- DepositConsumer
 ```
 
 ## Runtime responsibilities
@@ -185,6 +213,9 @@ com.payment.payment_service
 - Processes transfer balance mutations with deterministic lock ordering.
 - Uses `ProcessedTransferEntity` for idempotency.
 - Writes debit and credit events to the outbox after a successful wallet mutation.
+- Manages deposit creation and processing via payment providers.
+- Handles webhooks from payment providers for deposit completion.
+- Supports extensible payment provider interface (Stripe implemented).
 
 ### `transfer`
 
@@ -196,6 +227,7 @@ com.payment.payment_service
 
 - Maintains the ledger of debit and credit entries.
 - Reacts to wallet events and publishes the final transfer status event.
+- Processes deposit completion events and persists credit ledger entries.
 
 ## Public HTTP API
 
@@ -211,6 +243,10 @@ com.payment.payment_service
 | `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns the wallet for a user |
 | `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Source wallet must belong to caller |
 | `GET` | `/api/v1/transfers?walletId=...` | Owner or `ADMIN` | Paginated, sorted by `createdAt DESC` |
+| `POST` | `/api/v1/deposits` | Authenticated | Creates deposit and returns checkout URL |
+| `POST` | `/api/v1/deposits/webhook` | Public | Receives payment provider webhooks |
+| `GET` | `/api/v1/deposits/{id}` | Owner or `ADMIN` | Returns deposit details |
+| `GET` | `/api/v1/deposits?walletId=...` | Owner or `ADMIN` | Paginated deposit list |
 | `GET` | `/actuator/health` | Public | Health endpoint |
 
 ## Kafka topology
@@ -224,6 +260,7 @@ com.payment.payment_service
 | `payment.wallet.credits` | `WalletCreditedEvent` | `OutboxPublisher` | `transaction.TransferConsumer.consumeCredit(...)` |
 | `payment.transfer.created` | `TransferCreatedEvent` | `OutboxPublisher` | `wallet.TransferWalletConsumer` |
 | `payment.transfer.status` | `TransferStatusChangedEvent` | `KafkaEventProducer` from transaction/wallet flow | `transfer.TransferStatusConsumer` |
+| `payment.deposit.completed` | `DepositCompletedEvent` | `OutboxPublisher` | `transaction.DepositConsumer` |
 
 ### Dead-letter topics
 
@@ -272,6 +309,7 @@ transfer.TransferStatusConsumer
 | `UserEntity` | Registered user account with encrypted PII and hashed password |
 | `WalletEntity` | User balance container |
 | `TransferEntity` | Transfer request and current status |
+| `DepositEntity` | Deposit request with payment provider integration |
 | `TransactionEntity` | Immutable ledger entry for debit/credit history |
 | `ProcessedTransferEntity` | Idempotency marker for transfer processing |
 | `OutboxEntity` | Pending/published integration event record |

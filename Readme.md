@@ -21,6 +21,8 @@ A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos d
 | **Validação** | Bean Validation + Value Objects |
 | **Build** | Maven |
 | **Migrações** | Flyway |
+| **Monitoramento** | Prometheus + Grafana |
+| **Payment Providers** | Stripe (extensível) |
 
 ---
 
@@ -32,9 +34,10 @@ A aplicação utiliza **Kafka** para comunicação assíncrona entre contextos d
 payment_service
 ├── shared          ← contratos, eventos, infraestrutura transversal
 ├── user            ← cadastro, autenticação e gestão de usuários
-├── wallet          ← carteiras digitais e processamento de transferências
+├── wallet          ← carteiras digitais, transferências e depósitos
 ├── transfer        ← orquestração de transferências
 ├── transaction     ← ledger imutável de movimentações
+├── deposit         ← processamento de depósitos e webhooks
 └── auth            ← autenticação JWT e autorização
 ```
 
@@ -257,6 +260,67 @@ Serviço interno do contexto `transfer`. Valida todas as pré-condições antes 
 
 ---
 
+## 💵 Módulo de Depósitos (Deposit)
+
+Gerencia o processo de depósito em carteiras digitais através de integração com provedores de pagamento (Stripe).
+
+### Campos da entidade
+
+| Campo | Descrição |
+|---|---|
+| `id` | UUID gerado automaticamente |
+| `walletId` | Carteira que receberá o depósito |
+| `amount` | Valor em BRL. `BigDecimal`. |
+| `status` | `PENDING` → `COMPLETED` ou `FAILED` |
+| `paymentProvider` | `STRIPE` (extensível para outros provedores) |
+| `externalPaymentId` | ID da transação no provedor de pagamento |
+| `createdAt / updatedAt` | Gerenciados pela `BaseEntity`. |
+
+### Fluxo de execução
+
+```
+1. POST /api/v1/deposits
+   → CreateDepositService.create()
+   → Cria DepositEntity com status PENDING
+   → Integra com provedor de pagamento (Stripe)
+   → Retorna checkout URL para o usuário
+
+2. Webhook do provedor de pagamento
+   → DepositController.webhook()
+   → Verifica assinatura do webhook
+   → ProcessDepositService.process()
+   → Atualiza saldo da carteira
+   → Marca depósito como COMPLETED
+   → Publica DepositCompletedEvent no Kafka
+
+3. TransactionConsumer (Kafka)
+   → Persiste TransactionEntity tipo CREDIT
+```
+
+### Endpoints
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| `POST` | `/api/v1/deposits` | Autenticado | Cria um depósito e retorna URL de checkout do provedor de pagamento |
+| `POST` | `/api/v1/deposits/webhook` | Público | Recebe webhooks de provedores de pagamento (assinatura verificada) |
+| `GET` | `/api/v1/deposits/{id}` | Owner ou `ADMIN` | Retorna detalhes do depósito |
+| `GET` | `/api/v1/deposits?walletId=` | Owner ou `ADMIN` | Lista depósitos da carteira (paginado, ordenado por `createdAt` DESC) |
+
+### Eventos publicados e consumidos
+
+| Direção | Evento | Tópico | Ação |
+|---|---|---|---|
+| Publica | `DepositCompletedEvent` | `payment.deposit.completed` | Ao completar depósito (via Outbox) |
+
+### Provedores de pagamento suportados
+
+| Provedor | Status |
+|---|---|
+| `STRIPE` | ✅ Implementado |
+| Outros | 🔌 Extensível |
+
+---
+
 ## 📜 Módulo de Transações (Transaction)
 
 Ledger imutável de todas as movimentações de saldo. Alimentado via Kafka — nunca chamado diretamente pelo fluxo de transferência.
@@ -397,13 +461,27 @@ export JWT_SECRET="<base64-encoded-hmac-key>"
 
 ### Executar com Docker Compose (Full Stack)
 
-> **Nota:** Adicione `JWT_SECRET` à seção `payment-service.environment` no `docker-compose.yml` para startup com auth habilitado.
+> **Nota:** O `docker-compose.yml` já repassa `JWT_SECRET` para o container. Garanta apenas que esse valor exista no seu `.env`.
 
 ```bash
+# Inicia todos os serviços incluindo monitoramento
 docker compose up --build
 ```
 
-A aplicação estará disponível em http://localhost:8080
+A aplicação estará disponível em:
+- **API**: http://localhost:8080
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+### Scripts utilitários
+
+```bash
+# Popular banco de dados com dados de teste
+./seed.sh
+
+# Executar testes de carga
+./load.sh
+```
 
 ### Executar Testes
 
@@ -421,6 +499,28 @@ A aplicação estará disponível em http://localhost:8080
 ---
 
 ## 📊 Monitoramento
+
+### Stack de Observabilidade
+
+A aplicação utiliza uma stack moderna de observabilidade composta por:
+
+| Componente | Descrição |
+|---|---|
+| **Prometheus** | Coleta e armazena métricas da aplicação |
+| **Grafana** | Dashboards visuais para monitoramento em tempo real |
+| **Logback** | Logging estruturado em JSON para melhor ingestão |
+| **Micrometer** | Abstração para métricas da aplicação |
+
+### Métricas disponíveis
+
+| Categoria | Métricas |
+|---|---|
+| **Transferências** | Contagem, taxa de sucesso/falha, tempo de execução |
+| **Depósitos** | Contagem, por provedor, tempo de processamento |
+| **Carteiras** | Saldos, transações por carteira |
+| **Kafka** | Mensagens produzidas/consumidas, latência |
+| **HTTP** | Requisições por endpoint, tempo de resposta, status codes |
+| **JVM** | Heap, GC, threads |
 
 ### Health Check
 
@@ -520,6 +620,26 @@ curl -X POST http://localhost:8080/api/v1/transfers \
 
 ```bash
 curl "http://localhost:8080/api/v1/transfers?walletId=<wallet-uuid>&page=0&size=20" \
+  -H "Authorization: Bearer <jwt>"
+```
+
+### Criar Depósito
+
+```bash
+curl -X POST http://localhost:8080/api/v1/deposits \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "walletId": "<wallet-uuid>",
+    "amount": 500.00,
+    "paymentProvider": "STRIPE"
+  }'
+```
+
+### Listar Depósitos
+
+```bash
+curl "http://localhost:8080/api/v1/deposits?walletId=<wallet-uuid>&page=0&size=20" \
   -H "Authorization: Bearer <jwt>"
 ```
 

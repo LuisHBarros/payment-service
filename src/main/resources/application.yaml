@@ -53,6 +53,14 @@ management:
   metrics:
     tags:
       application: payment-service    # tag global em todas as métricas
+  tracing:
+    sampling:
+      probability: 1.0                # amostragem de 100% dos traces em desenvolvimento
+    propagation:
+      type: w3c,b3                    # suporta W3C Trace Context e B3
+  otlp:
+    tracing:
+      endpoint: http://localhost:4317 # endpoint OTLP gRPC do Jaeger
 
 stripe:
   secret-key: ${STRIPE_SECRET_KEY}

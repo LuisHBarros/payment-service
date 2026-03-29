@@ -214,13 +214,165 @@ docker compose up -d
 
 ---
 
-## 9. Lacunas e melhorias futuras
+## 10. Distributed Tracing (OpenTelemetry)
 
-| Item | Descrição |
-|---|---|
-| Métricas de deposit | Adicionar counters para depósitos criados, processados e falhados em `PaymentMetrics` |
-| Métricas de rate limiting | Contar requests bloqueados por endpoint |
-| Métricas de Kafka consumer | Contar mensagens processadas por topic, lag do consumer group |
-| Logging estruturado JSON | Atualizar `logback-spring.xml` para output JSON (atualmente console text) |
-| Alertas no Grafana | Definir regras de alerta (ex: transfer fail rate > threshold, DB connection pool exausto) |
-| Distributed tracing | Integrar OpenTelemetry para rastreamento end-to-end de transfer → wallet → transaction |
+### 10.1 Arquitetura de Tracing
+
+```text
+┌─────────────────┐     HTTP      ┌──────────────────────────────────────────────────────────┐
+│   API Client    │ ─────────────→│              Payment Service (Spring Boot)               │
+└─────────────────┘               │  ┌─────────────────┐    ┌─────────────────────────────┐  │
+                                  │  │ TransferController│ →  │ CreateTransferService      │  │
+                                  │  │  - Span: http_post│    │  - Span: transfer.create   │  │
+                                  │  │    /api/v1/transfers│   │  - Tags: wallets, amount   │  │
+                                  │  └─────────────────┘    └──────────────┬──────────────┘  │
+                                  │                                          │                   │
+                                  │                                          ↓                   │
+                                  │                              ┌─────────────────────┐         │
+                                  │                              │   OutboxPublisher   │         │
+                                  │                              │  - Span: kafka.produce│         │
+                                  │                              │  - Inject trace ctx │         │
+                                  │                              └──────────┬──────────┘         │
+                                  │                                         │                    │
+                                  └─────────────────────────────────────────┼────────────────────┘
+                                                                            │ Kafka
+                                                                            ↓
+                                  ┌─────────────────────────────────────────┼────────────────────┐
+                                  │              Payment Service (cont.)      │                    │
+                                  │  ┌──────────────────────────────────────┴─────────────────┐  │
+                                  │  │         TransferWalletConsumer                          │  │
+                                  │  │  - Span: kafka.consume.transfer-created                │  │
+                                  │  │  - Extract trace ctx from headers                      │  │
+                                  │  │  - Child span: wallet.process-transfer                 │  │
+                                  │  └──────────────────────────────┬───────────────────────────┘  │
+                                  │                                 │                            │
+                                  │                                 ↓                            │
+                                  │                    ┌─────────────────────┐                   │
+                                  │                    │ ProcessTransferService│                  │
+                                  │                    │  - Span: wallet.process-transfer        │
+                                  │                    │  - Updates balances   │                   │
+                                  │                    │  - Publishes events   │                   │
+                                  │                    └──────────┬──────────┘                   │
+                                  │                               │                              │
+                                  │                               ↓                              │
+                                  │                    ┌─────────────────────┐                   │
+                                  │                    │   KafkaEventProducer  │                   │
+                                  │                    │  - Span: kafka.produce.wallet-{debit/credit}│
+                                  │                    │  - Inject trace ctx   │                   │
+                                  │                    └──────────┬──────────┘                   │
+                                  │                               │                              │
+                                  └───────────────────────────────┼──────────────────────────────┘
+                                                                  │ Kafka
+                                                                  ↓
+                                  ┌──────────────────────────────────────────────────────────────┐
+                                  │                    TransferConsumer                          │
+                                  │  - Span: kafka.consume.wallet-{debit/credit}                  │
+                                  │  - Extract trace ctx from headers                            │
+                                  │  - Child span: transaction.create-{debit/credit}            │
+                                  │  - Calls CreateTransactionService                            │
+                                  │  - Publishes TransferStatusChangedEvent(COMPLETED)            │
+                                  └──────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 Stack de Tracing
+
+| Componente | Versão | Função |
+|---|---|---|
+| Micrometer Tracing | Spring Boot managed | Abstração de tracing |
+| micrometer-tracing-bridge-otel | Spring Boot managed | Bridge Micrometer → OpenTelemetry |
+| opentelemetry-exporter-otlp | 1.x | Exportador OTLP para Jaeger |
+| OpenTelemetry SDK | 1.x | SDK para criação de spans customizados |
+| Jaeger All-in-One | 1.50 | Backend de storage e UI de traces |
+
+### 10.3 Propagação de Contexto
+
+O tracing implementa **dois formatos de propagação** para máxima compatibilidade:
+
+- **W3C Trace Context**: `traceparent` header (padrão moderno)
+- **B3 Propagation**: Headers `X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled` (compatibilidade com Zipkin/Jaeger legacy)
+
+A propagação ocorre via:
+- **HTTP**: Automaticamente via Micrometer Tracing
+- **Kafka**: Headers das mensagens injetados por `KafkaTracingPropagator`
+
+### 10.4 Spans e Tags
+
+#### Spans HTTP (automáticos)
+- `http_post /api/v1/transfers` - Controller de criação de transfer
+- `http_get /api/v1/wallets/{id}` - Consulta de wallet
+
+#### Spans de Negócio (customizados)
+| Span | Localização | Tags Importantes |
+|---|---|---|
+| `transfer.create` | CreateTransferService | `transfer.source_wallet`, `transfer.destination_wallet`, `transfer.amount`, `transfer.id` |
+| `wallet.process-transfer` | ProcessTransferService (via TransferWalletConsumer) | `transfer.id`, lock order, debit/credit wallets |
+| `transaction.create-debit` | CreateTransactionService (via TransferConsumer) | `wallet.id`, `transfer.id`, `transaction.type` |
+| `transaction.create-credit` | CreateTransactionService (via TransferConsumer) | `wallet.id`, `transfer.id`, `transaction.type` |
+
+#### Spans Kafka (automáticos + customizados)
+| Span | Localização | Tags |
+|---|---|---|
+| `kafka.produce.transfer-created` | KafkaEventProducer | `kafka.topic`, `kafka.key`, `kafka.partition`, `kafka.offset` |
+| `kafka.produce.wallet-debited` | KafkaEventProducer | (mesmas tags) |
+| `kafka.produce.wallet-credited` | KafkaEventProducer | (mesmas tags) |
+| `kafka.consume.transfer-created` | TransferWalletConsumer | `kafka.topic`, `kafka.partition`, `kafka.offset`, `transfer.id` |
+| `kafka.consume.wallet-debit` | TransferConsumer | `kafka.topic`, `kafka.partition`, `kafka.offset`, `wallet.id`, `transfer.id` |
+| `kafka.consume.wallet-credit` | TransferConsumer | (mesmas tags) |
+
+### 10.5 Como Visualizar Traces
+
+```bash
+# Iniciar stack completa com Jaeger
+docker compose up -d
+
+# Acessar UI do Jaeger
+open http://localhost:16686
+```
+
+**Fluxo de trace end-to-end para uma transferência:**
+1. Client faz `POST /api/v1/transfers` → Span `http_post` criado automaticamente
+2. `CreateTransferService` cria span `transfer.create` com tags de negócio
+3. Evento publicado no Kafka com headers `traceparent` e `X-B3-*`
+4. `TransferWalletConsumer` extrai contexto e cria span `kafka.consume.transfer-created`
+5. `ProcessTransferService` cria span `wallet.process-transfer` atualizando saldos
+6. Novos eventos publicados no Kafka com mesmo trace ID
+7. `TransferConsumer` extrai contexto e cria spans de transação
+8. Spans de transação finalizam trace no ledger
+
+### 10.6 Configuração
+
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: 1.0  # 100% em dev, reduzir em produção
+    propagation:
+      type: w3c,b3    # Ambos os formatos
+  otlp:
+    tracing:
+      endpoint: http://localhost:4317  # Jaeger OTLP
+```
+
+### 10.7 URLs do Observability Stack
+
+| Serviço | URL | Credenciais |
+|---|---|---|
+| Aplicação | http://localhost:8080 | — |
+| Health | http://localhost:8080/actuator/health | — |
+| Métricas raw | http://localhost:8080/actuator/prometheus | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | admin / admin |
+| **Jaeger UI** | **http://localhost:16686** | — |
+
+---
+
+## 11. Lacunas e melhorias futuras
+
+| Item | Descrição | Status |
+|---|---|---|
+| Métricas de deposit | Adicionar counters para depósitos criados, processados e falhados em `PaymentMetrics` | Aberto |
+| Métricas de rate limiting | Contar requests bloqueados por endpoint | Aberto |
+| Métricas de Kafka consumer | Contar mensagens processadas por topic, lag do consumer group | Aberto |
+| Logging estruturado JSON | Atualizar `logback-spring.xml` para output JSON (atualmente console text) | Aberto |
+| Alertas no Grafana | Definir regras de alerta (ex: transfer fail rate > threshold, DB connection pool exausto) | Aberto |
+| ~~Distributed tracing~~ | ~~Integrar OpenTelemetry para rastreamento end-to-end~~ | **Implementado** |

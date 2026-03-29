@@ -11,6 +11,11 @@
 
 ---
 
+### Diagrama de arquitetura
+
+Diagrama interativo disponível em: https://luishbarros.github.io/payment-service/diagram.html
+
+
 ## Visão geral
 
 O projeto é estruturado em contextos delimitados (`auth`, `user`, `wallet`, `transfer`, `transaction`) e usa eventos para desacoplar operações críticas. Toda mutação de negócio persiste primeiro no banco e delega a publicação assíncrona para a tabela de outbox, que faz polling e entrega garantida para o Kafka.
@@ -217,6 +222,20 @@ O fallback levanta `PaymentProviderException` com mensagem de indisponibilidade 
 | Application API | `application-api.json` | Req/s por endpoint, latência P50/P95/P99, distribuição de status HTTP |
 | Infrastructure JVM | `infrastructure-jvm.json` | Heap, GC, CPU, threads, conexões de banco |
 
+#### Exemplos visuais
+
+**Business Metrics**
+
+![Business Metrics Dashboard](grafana_dashboards/Business%20Metrics.png)
+
+**API Production**
+
+![API Production Dashboard](grafana_dashboards/API%20Production.png)
+
+**Infrastructure & JVM**
+
+![Infrastructure & JVM Dashboard](grafana_dashboards/Infrastructure%20%26%20JVM.png)
+
 ### Serviços locais
 
 | Serviço | URL | Credenciais |
@@ -308,24 +327,6 @@ Para testar endpoints protegidos pela UI, faca login em `POST /api/v1/auth/login
 
 > **CI:** `.github/workflows/ci.yml` executa `./mvnw --batch-mode --no-transfer-progress verify` no GitHub Actions. Em caso de falha, os relatórios de Surefire e Failsafe ficam publicados como artifact.
 
----
-
-## Pendências conhecidas
-
-| Prioridade | Item | Status |
-|---|---|---|
-| Alta | CI executar `mvn verify` com integração no GitHub Actions | Resolvido |
-| Alta | Testes diretos para `OutboxPublisher` | Parcial |
-| Alta | Testes de throttling para `RateLimitFilter` | Aberto |
-| Média | Política de senha com requisitos de complexidade | Aberto |
-| Média | Migrar `AesEncryptor` de AES-CBC para AES-GCM com charset explícito | Aberto |
-| Média | Suporte a múltiplos payment providers (somente `STRIPE` implementado) | Aberto |
-| Média | Notificações de depósito (email / push / webhook de saída) | Aberto |
-| Baixa | Node Exporter + cAdvisor para métricas de host/container | Aberto |
-| Baixa | Logging estruturado JSON (`logback-spring.xml` usa texto simples atualmente) | Aberto |
-| Baixa | OpenTelemetry para distributed tracing end-to-end | Aberto |
-
----
 
 ## Documentação complementar
 

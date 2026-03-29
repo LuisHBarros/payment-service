@@ -1,416 +1,145 @@
-# Decisões Técnicas
+# Decisoes tecnicas
 
-Registro de decisões técnicas tomadas durante o desenvolvimento do payment-service, incluindo implementações concluídas e melhorias futuras.
+Last updated: 2026-03-29
 
----
+Este documento registra decisoes que ja estao refletidas no codigo atual. O objetivo aqui nao e manter uma cronologia completa, e sim deixar claro quais invariantes arquiteturais o projeto depende para continuar evoluindo sem regressao.
 
-## ✅ Decisões Implementadas
+## 1. Integracao entre modulos por eventos e outbox
 
-### 1. Comunicação entre Contextos via Kafka
+**Status:** implementado
 
-**Status:** ✅ Implementado (2026)
+**Decisao**
 
-**Contexto:**
-Inicialmente, o projeto tinha chamadas diretas entre contextos (`User → Wallet`, `Transfer → Wallet`), violando o princípio de isolamento do DDD.
+Persistir alteracoes de negocio primeiro e publicar eventos assincronos via tabela de outbox, em vez de chamar modulos vizinhos diretamente.
 
-**Decisão:**
-Substituir todas as chamadas diretas por eventos Kafka para garantir desacoplamento completo entre contextos de domínio.
+**Como isso aparece no codigo**
 
-**Implementação:**
-- `CreateUserService` publica `UserCreatedEvent` no tópico `payment.users`
-- `CreateWalletConsumer` consome `UserCreatedEvent` e cria a carteira
-- `CreateTransferService` publica `TransferCreatedEvent` no tópico `payment.transfers`
-- `TransferWalletConsumer` consome `TransferCreatedEvent` e processa a transferência
-- `ProcessTransferService` publica `WalletDebitedEvent` e `WalletCreditedEvent` no tópico `payment.wallets`
+- `CreateTransferService` grava `TRANSFER_CREATED` na outbox.
+- `ProcessDepositService` grava `DEPOSIT_COMPLETED` na outbox.
+- `OutboxPublisher` faz polling da tabela, publica no Kafka e controla retries, recovery e cleanup.
 
-**Benefícios:**
-- Desacoplamento total entre contextos
-- Escalabilidade independente por contexto
-- Resiliência via retry e DLT
-- Auditoria via logs de eventos
+**Motivo**
 
----
+- reduz acoplamento entre contextos;
+- evita depender de disponibilidade imediata do broker no caminho sincrono;
+- permite recuperacao controlada para falhas de publicacao.
 
-### 2. Lock Pessimista Determinístico
+## 2. Processamento de transferencias com lock deterministico
 
-**Status:** ✅ Implementado (2026)
+**Status:** implementado
 
-**Contexto:**
-Com a migração para eventos assíncronos, era necessário evitar race conditions e deadlocks em transferências concorrentes.
+**Decisao**
 
-**Decisão:**
-Implementar lock pessimista com ordenação determinística para garantir exclusão mútua e prevenir deadlocks.
+Ao processar uma transferencia, a carteira com menor UUID e bloqueada primeiro para evitar deadlock.
 
-**Implementação:**
-```java
-// WalletRepository.java
-@Lock(LockModeType.PESSIMISTIC_WRITE)
-@Query("select w from WalletEntity w where w.id = :id")
-Optional<WalletEntity> findByIdForUpdate(UUID id);
-```
+**Como isso aparece no codigo**
 
-```java
-// ProcessTransferService.java
-// Sempre lock a carteira com menor UUID primeiro
-UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
-    ? sourceWalletId
-    : destinationWalletId;
-```
-
-**Benefícios:**
-- Prevenção matemática de deadlocks (ordem total de locks)
-- Proteção contra race conditions em saldos
-- Permite concorrência em transferências não conflitantes
-- Simplicidade do algoritmo (comparação de UUIDs)
+- `ProcessTransferService` aplica ordenacao deterministica antes de debitar e creditar.
+- `WalletRepository` oferece acesso com lock pessimista para mutacao de saldo.
 
----
+**Motivo**
 
-### 3. Idempotência em Processamento de Transferências
+- preserva consistencia de saldo em cenarios concorrentes;
+- reduz risco de deadlock entre transferencias cruzadas;
+- mantem a regra simples o bastante para ser auditavel.
 
-**Status:** ✅ Implementado (2026)
+## 3. Idempotencia no consumo de eventos financeiros
 
-**Contexto:**
-Com retry e reprocessamento de mensagens Kafka, era essencial evitar processamento duplicado de transferências.
+**Status:** implementado
 
-**Decisão:**
-Implementar idempotência via `ProcessedTransferRepository` para garantir que cada transferência seja processada apenas uma vez.
+**Decisao**
 
-**Implementação:**
-```java
-// ProcessTransferService.java
-if (processedTransferRepository.existsById(transferId)) {
-    log.info("Transfer {} already processed, skipping", transferId);
-    return;
-}
-// ... processa transferência
-var processedTransfer = new ProcessedTransferEntity();
-processedTransfer.setId(transferId);
-processedTransferRepository.save(processedTransfer);
-```
-
-**Benefícios:**
-- Segurança contra reprocessamento duplicado
-- Retries transparentes sem efeitos colaterais
-- Garantia de exatamente-uma-vez em transferências bem-sucedidas
-
----
-
-### 4. Idempotência em Atualizações de Status
-
-**Status:** ✅ Implementado (2026)
-
-**Contexto:**
-Consumidores de `TransferStatusChangedEvent` poderiam receber eventos duplicados, causando atualizações redundantes.
-
-**Decisão:**
-Verificar status antes de atualizar `TransferEntity` para garantir idempotência.
-
-**Implementação:**
-```java
-// TransferStatusConsumer.java
-if (transfer.getStatus() != event.status()) {
-    transfer.setStatus(event.status());
-    transferRepository.save(transfer);
-    log.info("Updated transfer status to {} for transferId={}",
-             event.status(), event.transferId());
-} else {
-    log.info("Transfer status already {} for transferId={}, skipping update",
-             event.status(), event.transferId());
-}
-```
-
-**Benefícios:**
-- Evita atualizações redundantes no banco
-- Logs claros de quando updates são ignorados
-- Suporte natural a reprocessamento de mensagens
-
----
-
-### 5. Retry com Backoff Exponencial
-
-**Status:** ✅ Implementado (2026)
-
-**Contexto:**
-Falhas transitórias (Kafka unavailable, timeout) poderiam causar falha de transferência permanentemente.
-
-**Decisão:**
-Implementar retry com backoff exponencial para lidar com falhas transitórias.
-
-**Implementação:**
-```java
-// TransferPublishService.java
-@Retryable(
-    retryFor = {Exception.class},
-    maxAttempts = 3,
-    backoff = @Backoff(delay = 1000, multiplier = 2)
-)
-public void publish(TransferCreatedEvent event) {
-    kafkaEventProducer.publishTransferCreated(event);
-}
-
-@Recover
-public void recover(Exception e, TransferCreatedEvent event) {
-    transferStatusUpdateService.execute(event.transferId(), TransferStatus.FAILED);
-}
-```
-
-**Benefícios:**
-- Resiliência a falhas transitórias
-- Delays progressivos para dar tempo de recuperação
-- Fallback para status FAILED ao esgotar tentativas
-
----
-
-### 6. Resilience4j para Payment Provider
-
-**Status:** ✅ Implementado (2026)
-
-**Contexto:**
-`@EnableRetry` estava declarado na aplicação sem nenhum `@Retryable` em uso. Chamadas ao Stripe falhavam imediatamente sem retry, sem circuit breaker e sem fallback. Além disso, `spring-retry` estava no classpath sem `spring-boot-starter-aop`, tornando anotações inefetivas.
-
-**Decisão:**
-Migrar de `spring-retry` para Resilience4j como framework unificado de resiliência para o payment provider.
-
-**Implementação:**
-```java
-// StripePaymentProvider.java
-@Override
-@Retry(name = "paymentProvider", fallbackMethod = "createDepositFallback")
-@CircuitBreaker(name = "paymentProvider", fallbackMethod = "createDepositFallback")
-public PaymentProviderResponse createDeposit(BigDecimal amount, UUID userId, UUID walletId) {
-    // ...
-}
-
-private PaymentProviderResponse createDepositFallback(
-        BigDecimal amount, UUID userId, UUID walletId, Exception e) {
-    throw new PaymentProviderException("Payment provider temporarily unavailable.", e);
-}
-```
+Mensagens Kafka podem ser reprocessadas. Por isso, a mutacao de saldo precisa ser idempotente e a atualizacao de status precisa ignorar eventos repetidos.
 
-**Configuração (application.yaml):**
-- Retry: 3 tentativas, backoff exponencial 500ms (x2), retry apenas em `PaymentProviderException`
-- Circuit Breaker: abre com 50% falha em janela de 10 chamadas, slow call threshold 3s, wait 30s em open state
-- Exceções de negócio (`WebhookSignatureException`, `InvalidPaymentProviderException`) são ignoradas pelo retry
-
-**Benefícios:**
-- Retry com backoff exponencial para falhas transitórias do Stripe
-- Circuit breaker impede cascata de chamadas quando Stripe está indisponível
-- Fallback method com mensagem clara ao cliente (HTTP 502)
-- Métricas integradas com actuator/health via Resilience4j
-- Eliminação de `spring-retry` órfão (sem AOP nunca funcionaria)
-
----
-
-### 7. Arquitetura Híbrida: Spring Events + Kafka
-
-**Status:** ✅ Implementado (2026)
-
-**Contexto:**
-Precisava garantir que eventos fossem publicados apenas após commit da transação, mas também wanted comunicação assíncrona entre contextos.
-
-**Decisão:**
-Usar Spring Events para comunicação síncrona intra-contexto (após commit) e Kafka para comunicação assíncrona inter-contexto.
-
-**Implementação:**
-```java
-// CreateTransferService.java
-@Transactional
-public UUID execute(...) {
-    // ... cria transferência
-    eventPublisher.publishEvent(new TransferCreatedEvent(...)); // Spring Event
-}
-
-// TransferCreatedListener.java
-@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-public void handle(TransferCreatedEvent event) {
-    transferPublishService.publish(event); // Kafka
-}
-```
-
-**Benefícios:**
-- Eventos publicados apenas após commit consistente
-- Desacoplamento entre contextos
-- Flexibilidade para diferentes padrões de comunicação
-- Garantia de atomicidade na publicação de eventos locais
-
----
-
-### 7. Remoção de Serviços Diretos de Wallet
-
-**Status:** ✅ Implementado (2026)
-
-**Contexto:**
-`CreditWalletService` e `DebitWalletService` eram chamados diretamente pelo contexto `Transfer`, criando acoplamento forte.
-
-**Decisão:**
-Remover serviços diretos e substituir por fluxo baseado em eventos via `ProcessTransferService`.
-
-**Implementação:**
-- Removido: `CreditWalletService.java`, `DebitWalletService.java`
-- Adicionado: `ProcessTransferService.java` (processa débito e crédito atômicos)
-- Comunicação: `TransferCreatedEvent` → `TransferWalletConsumer` → `ProcessTransferService`
-
-**Benefícios:**
-- Desacoplamento completo entre `Transfer` e `Wallet`
-- Processamento atômico de débito e crédito
-- Simplificação do fluxo (um serviço para ambos)
-- Publicação consistente de eventos
-
----
-
-### 8. Dead Letter Topics (DLT)
-
-**Status:** ✅ Implementado (2026)
+**Como isso aparece no codigo**
 
-**Contexto:**
-Mensagens com falha permanente bloqueavam o consumo do tópico principal.
+- `ProcessedTransferEntity` e `ProcessedTransferRepository` evitam debito/credito duplicado.
+- `TransferStatusConsumer` compara o status antes de salvar novamente.
 
-**Decisão:**
-Configurar DLT para cada tópico Kafka, permitindo que mensagens com falha sejam isoladas sem bloquear o fluxo principal.
-
-**Implementação:**
-- `payment.users.DLT` para falhas em `payment.users`
-- `payment.wallets.DLT` para falhas em `payment.wallets`
-- `payment.transfers.DLT` para falhas em `payment.transfers`
-- Configuração via `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`
-
-**Benefícios:**
-- Isolamento de mensagens com falha
-- Possibilidade de reprocessamento manual
-- Monitoramento de erros via DLT
-- Continuidade do fluxo principal
+**Motivo**
 
----
+- evita efeito duplicado em retries de consumidor;
+- suporta DLT e reprocessamento sem corromper o ledger.
 
-### 9. Idempotência em Transações
+## 4. Kafka com retry antes de DLT
 
-**Status:** ✅ Implementado (2026)
+**Status:** implementado
 
-**Contexto:**
-O `TransactionConsumer` cria `TransactionEntity` baseado em eventos de wallet, mas não verificava se a transação já existia, podendo causar duplicação em caso de reprocessamento de mensagens.
+**Decisao**
 
-**Decisão:**
-Implementar verificação de unicidade antes de criar transação para garantir idempotência no ledger de transações.
+Aplicar retry no consumo antes de enviar para dead-letter topic, com valores externalizados em configuracao.
 
-**Implementação:**
-```java
-// CreateTransactionService.java
-private void save(UUID walletID, UUID transferID, TransactionType type, BigDecimal amount) {
-    // Idempotência: verificar se transação já existe
-    boolean transactionExists = transactionRepository
-        .existsByWalletIdAndTransferIdAndType(walletID, transferID, type);
+**Como isso aparece no codigo**
 
-    if (transactionExists) {
-        log.info("Transaction already exists for walletId={}, transferId={}, type={}, skipping creation",
-                 walletID, transferID, type);
-        return;
-    }
+- `KafkaConsumerConfig` usa `DefaultErrorHandler` com `DeadLetterPublishingRecoverer`.
+- `FixedBackOff` le os valores de `spring.kafka.consumer.listener.retry-backoff-ms` e `max-attempts`.
 
-    TransactionEntity transaction = new TransactionEntity();
-    transaction.setWalletId(walletID);
-    transaction.setTransferId(transferID);
-    transaction.setType(type);
-    transaction.setAmount(amount);
-    transactionRepository.save(transaction);
-    log.info("Created transaction for walletId={}, transferId={}, type={}",
-             walletID, transferID, type);
-}
-```
+**Motivo**
 
-```java
-// TransactionRepository.java
-boolean existsByWalletIdAndTransferIdAndType(UUID walletId, UUID transferId, TransactionType type);
-```
+- falhas transitorias nao devem mover mensagens para DLT cedo demais;
+- os valores precisam ser ajustaveis sem editar codigo.
 
-**Benefícios:**
-- Prevenção de transações duplicadas no ledger
-- Segurança contra reprocessamento de mensagens Kafka
-- Consistência imutável do histórico financeiro
-- Alinhado com idempotência implementada em outros contextos
+## 5. Resilience4j no payment provider
 
----
+**Status:** implementado
 
-## ⏳ Decisões Pendentes
+**Decisao**
 
-### 1. Filtros Adicionais em `GET /transfers`
+Usar Resilience4j no provider de deposito em vez de depender de configuracao de retry incompleta ou annotations sem AOP efetivo.
 
-**Status:** ⏸️ Pendente
+**Como isso aparece no codigo**
 
-**Contexto:**
-O endpoint `GET /api/v1/transfers?walletId=` foi implementado com paginação por `createdAt` descendente, mas sem filtros adicionais.
+- `StripePaymentProvider.createDeposit(...)` usa `@Retry` e `@CircuitBreaker`.
+- o fallback comum levanta `PaymentProviderException` com mensagem de indisponibilidade temporaria.
+- `application.yaml` concentra a configuracao de retry e circuit breaker da instancia `paymentProvider`.
+- `PaymentProviderResilienceTest` cobre tentativas, excecoes ignoradas e transicoes do circuit breaker.
 
-**Decisão pendente:**
-Avaliar e implementar filtros adicionais baseados em requisitos de negócio.
+**Motivo**
 
-**Possíveis filtros:**
-- Por período (`startDate`, `endDate`)
-- Por status (`COMPLETED`, `FAILED`, `PENDING`)
-- Por tipo (`DEBIT`, `CREDIT`)
+- retry com backoff exponencial para falhas transitorias do Stripe;
+- circuit breaker para reduzir cascata de chamadas quando o provider esta instavel;
+- comportamento explicito e testado para excecoes de negocio que nao devem ser repetidas.
 
-**Considerações:**
-- Requisitos dependem de casos de uso reais
-- Índices adicionais podem ser necessários no banco
-- Performance deve ser considerada para tabelas grandes
+## 6. Ownership enforcement no nivel web
 
----
+**Status:** implementado
 
-### 2. Endpoints de Consulta ao Ledger de Transações
+**Decisao**
 
-**Status:** ⏸️ Pendente
+Validar ownership no controller e em servicos de borda usando o usuario autenticado, em vez de duplicar filtros de seguranca em cada consulta.
 
-**Contexto:**
-O módulo `transaction` persiste o ledger de movimentações, mas não expõe endpoints de consulta.
+**Como isso aparece no codigo**
 
-**Decisão pendente:**
-Implementar endpoints para consulta do histórico de transações.
+- `SecurityUtils.requireOwnership(...)` e chamado em controllers de user, wallet, transfer e transaction.
+- `SecurityConfig` restringe o restante das rotas para usuarios autenticados.
 
-**Possíveis endpoints:**
-- `GET /api/v1/transactions?walletId=` - Listar transações da carteira
-- `GET /api/v1/transactions/{id}` - Detalhe de uma transação
-- `GET /api/v1/transactions?transferId=` - Todas as transações de uma transferência
+**Motivo**
 
-**Considerações:**
-- Transações são imutáveis, então cache é viável
-- Paginação é essencial (tabelas podem ser grandes)
-- Filtros por período e tipo podem ser úteis
+- regra de autorizacao fica centralizada;
+- reduz duplicacao entre modulos;
+- deixa claro quando uma rota depende de owner ou de papel administrativo.
 
----
+## 7. Observabilidade com Micrometer, Prometheus e Grafana
 
-## 🔄 Decisões Consideradas (Não Implementadas)
+**Status:** implementado
 
-### Lock Otimista em `WalletEntity`
+**Decisao**
 
-**Status:** ❌ Descartado em favor de Lock Pessimista
+Expor metricas de negocio e operacionais via Actuator/Micrometer e provisionar dashboards junto com a stack local.
 
-**Contexto:**
-Inicialmente foi considerado lock otimista via `@Version` para evitar conflitos.
+**Como isso aparece no codigo**
 
-**Motivo da descarte:**
-- Lock pessimista determinístico foi implementado como solução mais robusta
-- Garante exclusão mútua durante a transferência completa
-- Simples e matematicamente correto (ordem total de locks)
-- Lock otimista ainda pode ser adicionado como camada adicional se necessário
+- `PaymentMetrics` publica contadores e timers para transferencias, usuarios e outbox.
+- `docker-compose.yml` sobe `prometheus` e `grafana`.
+- `grafana/provisioning` e `grafana/dashboards` versionam datasource e dashboards.
 
----
+**Motivo**
 
-## 📊 Resumo de Evolução
+- a equipe precisa inspecionar latencia do outbox, volume de transferencias e falhas por motivo sem setup manual.
 
-| Mês | Mudança Principal | Impacto |
-|---|---|---|
-| 2026-03 | Implementação base com DDD | Contextos isolados, value objects |
-| 2026-03 | Migração para Kafka | Desacoplamento completo entre contextos |
-| 2026-03 | Lock pessimista + idempotência em transferências | Consistência em transferências concorrentes |
-| 2026-03 | Retry + DLT | Resiliência em cenários de falha |
-| 2026-03 | Idempotência em ledger de transações | Prevenção de duplicações no histórico financeiro |
+## Tradeoffs e limites atuais
 
----
-
-## 🎯 Princípios Arquiteturais
-
-As decisões tomadas seguem consistentemente os seguintes princípios:
-
-1. **Desacoplamento:** Contextos comunicam-se apenas via eventos, sem dependências diretas
-2. **Consistência:** Locks determinísticos e idempotência garantem integridade financeira
-3. **Resiliência:** Retry, DLT e idempotência lidam com falhas gracefully
-4. **Auditoria:** Ledger de transações imutável para traceabilidade completa
-5. **Escalabilidade:** Arquitetura assíncrona permite escala independente por contexto
+- O unico payment provider implementado hoje e `STRIPE`.
+- O CI ainda executa apenas `mvn test -B`; a suite de integracao do Failsafe nao roda no GitHub Actions.
+- `logback-spring.xml` ainda usa padrao textual simples; logging JSON nao esta ativo no codigo atual.
+- `AesEncryptor` ainda merece revisao para charset explicito e possivel migracao de CBC para GCM.

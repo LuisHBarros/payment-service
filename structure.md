@@ -1,4 +1,4 @@
-# Payment Service - Project Structure
+# Payment Service - Structure
 
 Last updated: 2026-03-29
 
@@ -7,423 +7,120 @@ Last updated: 2026-03-29
 ```text
 com.payment.payment_service
 |-- auth
-|   |-- controller
-|   |   `-- AuthController
-|   |-- dto
-|   |   |-- LoginRequest
-|   |   `-- LoginResponse
-|   |-- service
-|   |   |-- AuthService
-|   |   `-- JwtService
-|   `-- JwtAuthenticationFilter
-|
 |-- config
-|   |-- AuthenticatedUser
-|   |-- GlobalExceptionHandler
-|   |-- RateLimitConfig
-|   |-- RateLimitFilter
-|   |-- RateLimitProperties
-|   |-- SecurityConfig
-|   |-- SecurityUtils
-|   `-- payment
-|       `-- StripeConfig
-|
 |-- shared
-|   |-- config
-|   |   |-- KafkaConsumerConfig
-|   |   `-- KafkaTopicsConfig
-|   |-- crypto
-|   |   |-- AesEncryptor
-|   |   `-- HashUtil
-|   |-- dto
-|   |   |-- UserSummary
-|   |   `-- WalletSummary
-|   |-- entity
-|   |   |-- BaseEntity
-|   |   `-- OutboxEntity
-|   |-- event
-|   |   |-- DepositCompletedEvent
-|   |   |-- TransferStatusChangedEvent
-|   |   |-- UserCreatedEvent
-|   |   |-- WalletCreditedEvent
-|   |   `-- WalletDebitedEvent
-|   |-- kafka
-|   |   |-- KafkaEventProducer
-|   |   `-- OutboxPublisher
-|   |-- metrics
-|   |   `-- PaymentMetrics
-|   |-- query
-|   |   |-- UserQueryService
-|   |   `-- WalletQueryService
-|   |-- repository
-|   |   `-- OutboxRepository
-|   `-- type
-|       |-- TransferStatus
-|       `-- TransferType
-|
-|-- user
-|   |-- controller
-|   |   `-- UserController
-|   |-- converter
-|   |   |-- DocumentConverter
-|   |   `-- EmailConverter
-|   |-- dto
-|   |   |-- CreateUserRequestDTO
-|   |   |-- PatchUserRequestDTO
-|   |   `-- UserResponseDTO
-|   |-- entity
-|   |   `-- UserEntity
-|   |-- exceptions
-|   |   |-- UserDocumentException
-|   |   |-- UserEmailException
-|   |   |-- UserNotFoundException
-|   |   `-- UserPasswordException
-|   |-- repository
-|   |   `-- UserRepository
-|   |-- service
-|   |   |-- CreateUserService
-|   |   |-- DeleteUserService
-|   |   |-- GetUserService
-|   |   |-- PatchUserService
-|   |   |-- UpdatePasswordService
-|   |   |-- UpdateUserEmailService
-|   |   `-- UserQueryServiceImpl
-|   |-- type
-|   |   `-- UserType
-|   `-- value_object
-|       |-- Document
-|       |-- Email
-|       `-- Password
-|
-|-- wallet
-|   |-- consumer
-|   |   |-- CreateWalletConsumer
-|   |   `-- TransferWalletConsumer
-|   |-- controller
-|   |   |-- DepositController
-|   |   `-- WalletController
-|   |-- dto
-|   |   |-- CreateDepositRequestDTO
-|   |   |-- DepositResponseDTO
-|   |   `-- WalletResponseDTO
-|   |-- entity
-|   |   |-- DepositEntity
-|   |   |-- ProcessedTransferEntity
-|   |   `-- WalletEntity
-|   |-- exception
-|   |   |-- InsufficientBalanceException
-|   |   |-- InvalidPaymentProviderException
-|   |   |-- PaymentProviderException
-|   |   |-- WalletAlreadyExistsException
-|   |   |-- WalletNotFoundException
-|   |   `-- WebhookSignatureException
-|   |-- provider
-|   |   |-- PaymentProvider
-|   |   |-- PaymentProviderResponse
-|   |   |-- StripePaymentProvider
-|   |   `-- WebhookResult
-|   |-- repository
-|   |   |-- DepositRepository
-|   |   |-- ProcessedTransferRepository
-|   |   `-- WalletRepository
-|   |-- service
-|   |   |-- CreateDepositService
-|   |   |-- CreateWalletService
-|   |   |-- GetWalletService
-|   |   |-- ProcessDepositService
-|   |   |-- ProcessTransferService
-|   |   `-- WalletQueryServiceImpl
-|   `-- type
-|       |-- DepositStatus
-|       `-- PaymentProviderName
-|
-|-- transfer
-|   |-- consumer
-|   |   `-- TransferStatusConsumer
-|   |-- controller
-|   |   `-- TransferController
-|   |-- dto
-|   |   |-- CreateTransferRequestDTO
-|   |   |-- TransferFilterDTO
-|   |   `-- TransferResponseDTO
-|   |-- entity
-|   |   `-- TransferEntity
-|   |-- event
-|   |   `-- TransferCreatedEvent
-|   |-- exception
-|   |   |-- TransferException
-|   |   |-- TransferNotFoundException
-|   |   `-- UnauthorizedTransferException
-|   |-- repository
-|   |   `-- TransferRepository (JpaSpecificationExecutor)
-|   |-- service
-|   |   |-- CreateTransferService
-|   |   |-- GetTransferService
-|   |   |-- TransferAuthorizationService
-|   |   `-- TransferStatusUpdateService
-|   `-- specification
-|       `-- TransferSpecification
-|
 |-- transaction
-|   |-- consumer
-|   |   |-- DepositConsumer
-|   |   `-- TransferConsumer
-|   |-- controller
-|   |   `-- TransactionController
-|   |-- dto
-|   |   `-- TransactionResponseDTO
-|   |-- entity
-|   |   `-- TransactionEntity
-|   |-- exception
-|   |   `-- TransactionNotFoundException
-|   |-- repository
-|   |   `-- TransactionRepository
-|   |-- service
-|   |   |-- CreateTransactionService
-|   |   `-- GetTransactionService
-|   `-- type
-|       `-- TransactionType
-|
+|-- transfer
+|-- user
+|-- wallet
 `-- PaymentServiceApplication
-|
-`-- deposit (module - implemented within wallet)
-    |-- consumer
-    |   `-- DepositConsumer
 ```
 
-## Runtime responsibilities
+## Module responsibilities
 
 ### `auth`
 
-- Accepts login by email or document.
-- Issues self-signed JWTs with JJWT.
-- Revokes tokens on logout by storing the JWT ID in Redis until token expiry.
-- Injects authenticated user context through `JwtAuthenticationFilter`.
+- `AuthController` exposes login, logout and `me`.
+- `AuthService` authenticates by email or document.
+- `JwtService` issues tokens and validates expiration claims.
+- `JwtAuthenticationFilter` resolves the authenticated principal for protected routes.
 
 ### `config`
 
-- Centralizes Spring Security, rate limiting, error handling, and ownership checks.
-- `SecurityUtils.requireOwnership(...)` is the guard used by user, wallet, and transfer controllers.
-- Rate limiting is optional and is attached after JWT authentication when enabled.
+- `SecurityConfig` defines public routes, JWT filter order, CORS and stateless session policy.
+- `RateLimitConfig`, `RateLimitFilter` and `RateLimitProperties` provide optional throttling.
+- `GlobalExceptionHandler` maps domain exceptions to HTTP responses.
+- `SecurityUtils.requireOwnership(...)` is the standard ownership guard across controllers.
 
 ### `shared`
 
-- Holds cross-cutting infrastructure and contracts.
-- Defines Kafka topics, consumer error handling, shared events, and the outbox model.
-- `OutboxPublisher` is the scheduled relay that pulls pending rows from `outbox`, publishes them to Kafka, and handles retries and cleanup.
+- `shared/config` contains Kafka consumer and topic configuration.
+- `shared/entity/OutboxEntity` and `shared/repository/OutboxRepository` back the outbox table.
+- `shared/kafka/KafkaEventProducer` sends typed events to Kafka.
+- `shared/kafka/OutboxPublisher` polls pending rows, waits for Kafka acks, records metrics and performs recovery/cleanup.
+- `shared/metrics/PaymentMetrics` centralizes custom Micrometer counters and timers.
+- `shared/query` exposes cross-module read contracts used by controllers and services.
 
 ### `user`
 
-- Manages registration, retrieval, update, and deletion of users.
-- Stores encrypted email and document values through JPA converters.
-- Publishes `UserCreatedEvent` after persistence.
+- Persists users with encrypted email and document converters.
+- Derives `UserType` from CPF or CNPJ.
+- Publishes `UserCreatedEvent` after user creation.
 
 ### `wallet`
 
-- Creates one wallet per user.
-- Processes transfer balance mutations with deterministic lock ordering.
-- Uses `ProcessedTransferEntity` for idempotency.
-- Writes debit and credit events to the outbox after a successful wallet mutation.
-- Manages deposit creation and processing via payment providers.
-- Handles webhooks from payment providers for deposit completion.
-- Supports extensible payment provider interface (Stripe implemented).
+- `CreateWalletConsumer` creates one wallet per user from `UserCreatedEvent`.
+- `ProcessTransferService` performs balance mutation with deterministic lock ordering.
+- `ProcessedTransferEntity` prevents duplicate transfer processing.
+- `DepositController` manages deposit creation, listing and webhook handling.
+- `provider/StripePaymentProvider` is the only implemented payment provider today.
 
 ### `transfer`
 
-- Owns transfer creation and transfer status tracking.
-- Validates sender, receiver, ownership, and balance preconditions before creating a transfer.
-- Persists transfer creation as `PENDING` and records `TRANSFER_CREATED` in the outbox.
-- Supports listing transfers by wallet with optional combinable filters: `status`, `type` (virtual DEBIT/CREDIT), `startDate`, `endDate`.
-- Uses JPA Specification (`TransferSpecification`) to build dynamic queries with the filter combination.
-- The `type` filter is virtual: `DEBIT` matches `source_wallet_id = walletId`, `CREDIT` matches `destination_wallet_id = walletId`.
-- Response DTO includes a computed `type` field based on the requesting wallet's perspective.
+- `CreateTransferService` validates business preconditions, persists `TransferEntity` as `PENDING` and writes `TRANSFER_CREATED` to outbox.
+- `GetTransferService` queries transfers with optional filters.
+- `TransferStatusConsumer` consumes status updates and keeps `TransferEntity` synchronized.
 
 ### `transaction`
 
-- Maintains the ledger of debit and credit entries.
-- Reacts to wallet events and publishes the final transfer status event.
-- Processes deposit completion events and persists credit ledger entries.
-- Exposes query endpoints for transaction history with pagination and optional filters (walletId, transferId, type, date range).
+- `TransferConsumer` writes debit and credit ledger entries from wallet events.
+- `DepositConsumer` writes `CREDIT` entries for successful deposits.
+- `TransactionController` exposes paginated ledger queries by wallet or transfer.
 
-## Public HTTP API
+## HTTP surface
 
 | Method | Route | Access | Notes |
-|--------|-------|--------|-------|
+|---|---|---|---|
 | `POST` | `/api/v1/auth/login` | Public | Login with `identifier` + `password` |
-| `POST` | `/api/v1/auth/logout` | Authenticated | Revokes current JWT via Redis blacklist |
-| `POST` | `/api/v1/users` | Public | Creates a user; type is derived from CPF/CNPJ |
-| `GET` | `/api/v1/users` | `ADMIN` only | Paginated list |
-| `GET` | `/api/v1/users/{id}` | Owner or `ADMIN` | Ownership enforced in controller |
-| `PATCH` | `/api/v1/users/{id}` | Owner or `ADMIN` | Updates email and/or password |
-| `DELETE` | `/api/v1/users/{id}` | Owner or `ADMIN` | Soft/active logic is not used here; service deletes record |
-| `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns the wallet for a user |
-| `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Source wallet must belong to caller |
-| `GET` | `/api/v1/transfers?walletId=...` | Owner or `ADMIN` | Paginated, sorted by `createdAt DESC`. Optional filters: `status`, `type` (DEBIT/CREDIT), `startDate`, `endDate` |
-| `POST` | `/api/v1/deposits` | Authenticated | Creates deposit and returns checkout URL |
-| `POST` | `/api/v1/deposits/webhook` | Public | Receives payment provider webhooks |
-| `GET` | `/api/v1/deposits/{id}` | Owner or `ADMIN` | Returns deposit details |
-| `GET` | `/api/v1/deposits?walletId=...` | Owner or `ADMIN` | Paginated deposit list |
-| `GET` | `/api/v1/transactions?walletId=...` | Owner or `ADMIN` | Paginated, optional `type`, `startDate`, `endDate` filters |
-| `GET` | `/api/v1/transactions?transferId=...` | Authenticated | All transactions for a given transfer |
-| `GET` | `/api/v1/transactions/{id}` | Owner or `ADMIN` | Single transaction detail |
+| `GET` | `/api/v1/auth/me` | Authenticated | Returns current user |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Blacklists current JWT |
+| `POST` | `/api/v1/users` | Public | Creates user |
+| `GET` | `/api/v1/users` | `ADMIN` | Paginated list |
+| `GET` | `/api/v1/users/{id}` | Owner or `ADMIN` | Ownership check in controller |
+| `PATCH` | `/api/v1/users/{id}` | Owner or `ADMIN` | Partial update |
+| `DELETE` | `/api/v1/users/{id}` | Owner or `ADMIN` | Deletes record |
+| `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns wallet by user |
+| `POST` | `/api/v1/wallets/{userId}/deposits` | Owner or `ADMIN` | Creates deposit |
+| `GET` | `/api/v1/wallets/{userId}/deposits` | Owner or `ADMIN` | Lists deposits |
+| `POST` | `/api/v1/webhooks/deposits` | Public | Validates provider signature |
+| `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Creates transfer |
+| `GET` | `/api/v1/transfers` | Authenticated | Requires `walletId`; optional filters |
+| `GET` | `/api/v1/transactions` | Authenticated | Query by `walletId` or `transferId` |
+| `GET` | `/api/v1/transactions/{id}` | Authenticated | Returns transaction by id |
 | `GET` | `/actuator/health` | Public | Health endpoint |
+| `GET` | `/actuator/info` | Public | Info endpoint |
+| `GET` | `/actuator/metrics` | Public | Metrics index |
+| `GET` | `/actuator/prometheus` | Public | Prometheus scrape endpoint |
 
-## Kafka topology
+## Kafka topics and async handlers
 
-### Main topics
+| Topic | Event | Producer | Consumer |
+|---|---|---|---|
+| `payment.users` | `UserCreatedEvent` | user module via outbox | `wallet.CreateWalletConsumer` |
+| `payment.transfer.created` | `TransferCreatedEvent` | transfer module via outbox | `wallet.TransferWalletConsumer` |
+| `payment.wallet.debits` | `WalletDebitedEvent` | wallet module via outbox | `transaction.TransferConsumer` |
+| `payment.wallet.credits` | `WalletCreditedEvent` | wallet module via outbox | `transaction.TransferConsumer` |
+| `payment.transfer.status` | `TransferStatusChangedEvent` | transaction module via outbox | `transfer.TransferStatusConsumer` |
+| `payment.deposit.completed` | `DepositCompletedEvent` | wallet module via outbox | `transaction.DepositConsumer` |
 
-| Topic | Event types | Main producer(s) | Main consumer(s) |
-|-------|-------------|------------------|------------------|
-| `payment.users` | `UserCreatedEvent` | `CreateUserService` | `CreateWalletConsumer` |
-| `payment.wallet.debits` | `WalletDebitedEvent` | `OutboxPublisher` | `transaction.TransferConsumer.consumeDebit(...)` |
-| `payment.wallet.credits` | `WalletCreditedEvent` | `OutboxPublisher` | `transaction.TransferConsumer.consumeCredit(...)` |
-| `payment.transfer.created` | `TransferCreatedEvent` | `OutboxPublisher` | `wallet.TransferWalletConsumer` |
-| `payment.transfer.status` | `TransferStatusChangedEvent` | `KafkaEventProducer` from transaction/wallet flow | `transfer.TransferStatusConsumer` |
-| `payment.deposit.completed` | `DepositCompletedEvent` | `OutboxPublisher` | `transaction.DepositConsumer` |
+## Runtime rules worth preserving
 
-### Dead-letter topics
+- Ownership is enforced through `SecurityUtils.requireOwnership(...)`, not by repository filtering.
+- Rate limiting is optional and attached only when the filter bean is available.
+- Kafka consumer retries are configured in `KafkaConsumerConfig` with `FixedBackOff` before DLT publishing.
+- Outbox relay waits synchronously for Kafka ack per record and marks exhausted records as processed after recovery.
+- Stripe deposit creation uses Resilience4j retry and circuit breaker with a shared fallback.
+- `PaymentProviderName` currently supports only `STRIPE`.
 
-- Each main topic above also has a `.DLT` companion created by `KafkaTopicsConfig`.
-- `KafkaConsumerConfig` uses `DefaultErrorHandler` plus `DeadLetterPublishingRecoverer`.
-- Current retry policy is fixed backoff: 3 retries, 1 second apart, then DLT.
+## Operational files
 
-## Transfer lifecycle
-
-```text
-POST /api/v1/transfers
-  -> TransferController
-  -> SecurityUtils.requireOwnership(sourceWalletId)
-  -> CreateTransferService
-     -> TransferAuthorizationService.authorize(...)
-     -> save TransferEntity(status=PENDING)
-     -> save OutboxEntity(eventType=TRANSFER_CREATED)
-
-Scheduled OutboxPublisher
-  -> publish TransferCreatedEvent to payment.transfer.created
-
-TransferWalletConsumer
-  -> ProcessTransferService.execute(...)
-     -> idempotency check via ProcessedTransferRepository
-     -> deterministic wallet locking
-     -> debit source wallet
-     -> credit destination wallet
-     -> save processed marker
-     -> save outbox rows WALLET_DEBITED and WALLET_CREDITED
-
-Scheduled OutboxPublisher
-  -> publish wallet events
-
-transaction.TransferConsumer
-  -> persist debit and credit ledger rows
-  -> publish TransferStatusChangedEvent(COMPLETED or FAILED)
-
-transfer.TransferStatusConsumer
-  -> update TransferEntity status idempotently
-```
-
-## Persistence model
-
-| Entity | Purpose |
-|--------|---------|
-| `UserEntity` | Registered user account with encrypted PII and hashed password |
-| `WalletEntity` | User balance container |
-| `TransferEntity` | Transfer request and current status |
-| `DepositEntity` | Deposit request with payment provider integration |
-| `TransactionEntity` | Immutable ledger entry for debit/credit history |
-| `ProcessedTransferEntity` | Idempotency marker for transfer processing |
-| `OutboxEntity` | Pending/published integration event record |
-
-## Test layout
-
-```text
-src/test/java/com/payment/payment_service
-|-- config
-|   |-- SecurityUtilsTest
-|   `-- TestRedisConfig
-|-- integration
-|   |-- AbstractIntegrationTest
-|   |-- AuthControllerIT
-|   |-- TestHelper
-|   |-- TransferControllerIT
-|   |-- TransferFlowIT
-|   `-- WalletControllerIT
-|-- auth
-|   |-- JwtAuthenticationFilterTest
-|   `-- service
-|       `-- JwtServiceTest
-|-- transaction
-|   |-- service
-|   |   `-- CreateTransactionServiceTest
-|   `-- consumer
-|       |-- DepositConsumerTest
-|       `-- TransferConsumerTest
-|-- transfer
-|   |-- service
-|   |   |-- GetTransferServiceTest
-|   |   `-- TransferAuthorizationServiceTest
-|   `-- consumer
-|       `-- TransferStatusConsumerTest
-|-- user/controller
-|   `-- UserControllerTest
-|-- user/service
-|   |-- CreateUserServiceTest
-|   |-- DeleteUserServiceTest
-|   |-- GetUserServiceTest
-|   |-- PatchUserServiceTest
-|   |-- UpdatePasswordServiceTest
-|   `-- UpdateUserEmailServiceTest
-`-- wallet
-    |-- service
-    |   |-- CreateWalletServiceTest
-    |   `-- GetWalletServiceTest
-    `-- consumer
-        |-- CreateWalletConsumerTest
-        `-- TransferWalletConsumerTest
-```
-
-## Monitoring configuration
-
-```text
-.
-|-- prometheus.yml                          Prometheus scrape config (30s interval)
-|-- grafana/
-|   |-- provisioning/
-|   |   |-- datasources/
-|   |   |   `-- prometheus.yml              Auto-provisions Prometheus datasource
-|   |   `-- dashboards/
-|   |       `-- dashboards.yml              Dashboard provisioning config
-|   `-- dashboards/
-|       |-- business-metrics.json           Transfers, outbox, users dashboard
-|       |-- application-api.json            HTTP request rate, latency, errors dashboard
-|       `-- infrastructure-jvm.json         JVM, GC, HikariCP, Kafka, Redis dashboard
-```
-
-### Prometheus (`prometheus.yml`)
-
-- **scrape_interval**: 30s
-- **evaluation_interval**: 30s
-- **scrape_timeout**: 10s
-- Single job `payment-service` targeting `payment-service:8080/actuator/prometheus`
-
-### Grafana provisioning
-
-- Datasource `Prometheus` is auto-provisioned from `grafana/provisioning/datasources/prometheus.yml`
-- Dashboards are auto-provisioned from `grafana/provisioning/dashboards/dashboards.yml` pointing to `/var/lib/grafana/dashboards`
-- Dashboard JSON files in `grafana/dashboards/` are mounted as a Docker volume
-- Persistent storage via `grafana_data` Docker volume (survives container restart)
-
-### Docker volumes for monitoring
-
-| Volume | Container path | Service |
-|--------|---------------|---------|
-| `prometheus_data` | `/prometheus` | prometheus |
-| `grafana_data` | `/var/lib/grafana` | grafana |
-
-## Current structural notes
-
-- The project now uses an outbox table for transfer and wallet event publication. Old Spring event listener classes are no longer part of the design.
-- Topic design is split by event type instead of multiplexing several event classes on the same topic.
-- `user` exceptions use `exceptions`, while `transfer` and `wallet` use `exception`. The structure is intentionally documented as-is, not normalized.
-- `UserType` includes `ADMIN`, but there is no public endpoint in this service that creates admin users.
-- `TransferRepository` extends `JpaSpecificationExecutor` to support dynamic filter queries. The legacy `findBySourceWalletIdOrDestinationWalletId` query method is retained but no longer used by the listing endpoint.
-- Composite indexes `(source_wallet_id, created_at DESC)` and `(destination_wallet_id, created_at DESC)` were added in `V3` migration for efficient filtered pagination.
+| File | Purpose |
+|---|---|
+| `src/main/resources/application.yaml` | Main runtime configuration, Kafka, Redis, rate limit and Resilience4j |
+| `src/main/resources/logback-spring.xml` | Console logging pattern |
+| `docker-compose.yml` | Local stack with app, postgres, kafka, redis, prometheus and grafana |
+| `prometheus.yml` | Scrape config for `payment-service:8080/actuator/prometheus` |
+| `grafana/provisioning/datasources/prometheus.yml` | Grafana datasource provisioning |
+| `grafana/provisioning/dashboards/dashboards.yml` | Grafana dashboard provisioning |
+| `seed.sh` | Local seed flow with sample users and transfers |
+| `load.sh` | Simple transfer load generator |

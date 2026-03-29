@@ -1,8 +1,8 @@
-# Payment Service - Structure
+# Serviço de Pagamentos - Estrutura
 
-Last updated: 2026-03-29
+Última atualização: 2026-03-29
 
-## Package layout
+## Organização de pacotes
 
 ```text
 com.payment.payment_service
@@ -16,111 +16,111 @@ com.payment.payment_service
 `-- PaymentServiceApplication
 ```
 
-## Module responsibilities
+## Responsabilidades dos módulos
 
 ### `auth`
 
-- `AuthController` exposes login, logout and `me`.
-- `AuthService` authenticates by email or document.
-- `JwtService` issues tokens and validates expiration claims.
-- `JwtAuthenticationFilter` resolves the authenticated principal for protected routes.
+- `AuthController` expõe login, logout e `me`.
+- `AuthService` autentica por e-mail ou documento.
+- `JwtService` emite tokens e valida claims de expiração.
+- `JwtAuthenticationFilter` resolve o principal autenticado para rotas protegidas.
 
 ### `config`
 
-- `SecurityConfig` defines public routes, JWT filter order, CORS and stateless session policy.
-- `RateLimitConfig`, `RateLimitFilter` and `RateLimitProperties` provide optional throttling.
-- `GlobalExceptionHandler` maps domain exceptions to HTTP responses.
-- `SecurityUtils.requireOwnership(...)` is the standard ownership guard across controllers.
+- `SecurityConfig` define rotas públicas, ordem do filtro JWT, CORS e política de sessão stateless.
+- `RateLimitConfig`, `RateLimitFilter` e `RateLimitProperties` fornecem limitação de taxa opcional.
+- `GlobalExceptionHandler` mapeia exceções de domínio para respostas HTTP.
+- `SecurityUtils.requireOwnership(...)` é a guarda padrão de ownership entre os controllers.
 
 ### `shared`
 
-- `shared/config` contains Kafka consumer and topic configuration.
-- `shared/entity/OutboxEntity` and `shared/repository/OutboxRepository` back the outbox table.
-- `shared/kafka/KafkaEventProducer` sends typed events to Kafka.
-- `shared/kafka/OutboxPublisher` polls pending rows, waits for Kafka acks, records metrics and performs recovery/cleanup.
-- `shared/metrics/PaymentMetrics` centralizes custom Micrometer counters and timers.
-- `shared/query` exposes cross-module read contracts used by controllers and services.
+- `shared/config` contém a configuração de consumers e tópicos do Kafka.
+- `shared/entity/OutboxEntity` e `shared/repository/OutboxRepository` sustentam a tabela de outbox.
+- `shared/kafka/KafkaEventProducer` envia eventos tipados para o Kafka.
+- `shared/kafka/OutboxPublisher` busca linhas pendentes, aguarda os acks do Kafka, registra métricas e executa recuperação/limpeza.
+- `shared/metrics/PaymentMetrics` centraliza contadores e timers customizados do Micrometer.
+- `shared/query` expõe contratos de leitura entre módulos usados por controllers e services.
 
 ### `user`
 
-- Persists users with encrypted email and document converters.
-- Derives `UserType` from CPF or CNPJ.
-- Publishes `UserCreatedEvent` after user creation.
+- Persiste usuários com conversores criptografados de e-mail e documento.
+- Deriva `UserType` a partir de CPF ou CNPJ.
+- Publica `UserCreatedEvent` após a criação do usuário.
 
 ### `wallet`
 
-- `CreateWalletConsumer` creates one wallet per user from `UserCreatedEvent`.
-- `ProcessTransferService` performs balance mutation with deterministic lock ordering.
-- `ProcessedTransferEntity` prevents duplicate transfer processing.
-- `DepositController` manages deposit creation, listing and webhook handling.
-- `provider/StripePaymentProvider` is the only implemented payment provider today.
+- `CreateWalletConsumer` cria uma carteira por usuário a partir de `UserCreatedEvent`.
+- `ProcessTransferService` executa a mutação de saldo com ordenação determinística de locks.
+- `ProcessedTransferEntity` evita processamento duplicado de transferências.
+- `DepositController` gerencia criação de depósitos, listagem e tratamento de webhook.
+- `provider/StripePaymentProvider` é o único provedor de pagamento implementado atualmente.
 
 ### `transfer`
 
-- `CreateTransferService` validates business preconditions, persists `TransferEntity` as `PENDING` and writes `TRANSFER_CREATED` to outbox.
-- `GetTransferService` queries transfers with optional filters.
-- `TransferStatusConsumer` consumes status updates and keeps `TransferEntity` synchronized.
+- `CreateTransferService` valida pré-condições de negócio, persiste `TransferEntity` como `PENDING` e grava `TRANSFER_CREATED` na outbox.
+- `GetTransferService` consulta transferências com filtros opcionais.
+- `TransferStatusConsumer` consome atualizações de status e mantém `TransferEntity` sincronizada.
 
 ### `transaction`
 
-- `TransferConsumer` writes debit and credit ledger entries from wallet events.
-- `DepositConsumer` writes `CREDIT` entries for successful deposits.
-- `TransactionController` exposes paginated ledger queries by wallet or transfer.
+- `TransferConsumer` grava lançamentos de débito e crédito no razão a partir de eventos de carteira.
+- `DepositConsumer` grava entradas `CREDIT` para depósitos bem-sucedidos.
+- `TransactionController` expõe consultas paginadas do razão por carteira ou transferência.
 
-## HTTP surface
+## Superfície HTTP
 
-| Method | Route | Access | Notes |
+| Método | Rota | Acesso | Observações |
 |---|---|---|---|
-| `POST` | `/api/v1/auth/login` | Public | Login with `identifier` + `password` |
-| `GET` | `/api/v1/auth/me` | Authenticated | Returns current user |
-| `POST` | `/api/v1/auth/logout` | Authenticated | Blacklists current JWT |
-| `POST` | `/api/v1/users` | Public | Creates user |
-| `GET` | `/api/v1/users` | `ADMIN` | Paginated list |
-| `GET` | `/api/v1/users/{id}` | Owner or `ADMIN` | Ownership check in controller |
-| `PATCH` | `/api/v1/users/{id}` | Owner or `ADMIN` | Partial update |
-| `DELETE` | `/api/v1/users/{id}` | Owner or `ADMIN` | Deletes record |
-| `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns wallet by user |
-| `POST` | `/api/v1/wallets/{userId}/deposits` | Owner or `ADMIN` | Creates deposit |
-| `GET` | `/api/v1/wallets/{userId}/deposits` | Owner or `ADMIN` | Lists deposits |
-| `POST` | `/api/v1/webhooks/deposits` | Public | Validates provider signature |
-| `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Creates transfer |
-| `GET` | `/api/v1/transfers` | Authenticated | Requires `walletId`; optional filters |
-| `GET` | `/api/v1/transactions` | Authenticated | Query by `walletId` or `transferId` |
-| `GET` | `/api/v1/transactions/{id}` | Authenticated | Returns transaction by id |
-| `GET` | `/actuator/health` | Public | Health endpoint |
-| `GET` | `/actuator/info` | Public | Info endpoint |
-| `GET` | `/actuator/metrics` | Public | Metrics index |
-| `GET` | `/actuator/prometheus` | Public | Prometheus scrape endpoint |
+| `POST` | `/api/v1/auth/login` | Público | Login com `identifier` + `password` |
+| `GET` | `/api/v1/auth/me` | Autenticado | Retorna o usuário atual |
+| `POST` | `/api/v1/auth/logout` | Autenticado | Adiciona o JWT atual à blacklist |
+| `POST` | `/api/v1/users` | Público | Cria usuário |
+| `GET` | `/api/v1/users` | `ADMIN` | Lista paginada |
+| `GET` | `/api/v1/users/{id}` | Dono ou `ADMIN` | Verificação de ownership no controller |
+| `PATCH` | `/api/v1/users/{id}` | Dono ou `ADMIN` | Atualização parcial |
+| `DELETE` | `/api/v1/users/{id}` | Dono ou `ADMIN` | Exclui o registro |
+| `GET` | `/api/v1/wallets/{userId}` | Dono ou `ADMIN` | Retorna a carteira do usuário |
+| `POST` | `/api/v1/wallets/{userId}/deposits` | Dono ou `ADMIN` | Cria depósito |
+| `GET` | `/api/v1/wallets/{userId}/deposits` | Dono ou `ADMIN` | Lista depósitos |
+| `POST` | `/api/v1/webhooks/deposits` | Público | Valida a assinatura do provedor |
+| `POST` | `/api/v1/transfers` | `COMMON` ou `ADMIN` | Cria transferência |
+| `GET` | `/api/v1/transfers` | Autenticado | Requer `walletId`; filtros opcionais |
+| `GET` | `/api/v1/transactions` | Autenticado | Consulta por `walletId` ou `transferId` |
+| `GET` | `/api/v1/transactions/{id}` | Autenticado | Retorna a transação por id |
+| `GET` | `/actuator/health` | Público | Endpoint de health |
+| `GET` | `/actuator/info` | Público | Endpoint de info |
+| `GET` | `/actuator/metrics` | Público | Índice de métricas |
+| `GET` | `/actuator/prometheus` | Público | Endpoint de scrape do Prometheus |
 
-## Kafka topics and async handlers
+## Tópicos Kafka e handlers assíncronos
 
-| Topic | Event | Producer | Consumer |
+| Tópico | Evento | Produtor | Consumer |
 |---|---|---|---|
-| `payment.users` | `UserCreatedEvent` | user module via outbox | `wallet.CreateWalletConsumer` |
-| `payment.transfer.created` | `TransferCreatedEvent` | transfer module via outbox | `wallet.TransferWalletConsumer` |
-| `payment.wallet.debits` | `WalletDebitedEvent` | wallet module via outbox | `transaction.TransferConsumer` |
-| `payment.wallet.credits` | `WalletCreditedEvent` | wallet module via outbox | `transaction.TransferConsumer` |
-| `payment.transfer.status` | `TransferStatusChangedEvent` | transaction module via outbox | `transfer.TransferStatusConsumer` |
-| `payment.deposit.completed` | `DepositCompletedEvent` | wallet module via outbox | `transaction.DepositConsumer` |
+| `payment.users` | `UserCreatedEvent` | módulo `user` via outbox | `wallet.CreateWalletConsumer` |
+| `payment.transfer.created` | `TransferCreatedEvent` | módulo `transfer` via outbox | `wallet.TransferWalletConsumer` |
+| `payment.wallet.debits` | `WalletDebitedEvent` | módulo `wallet` via outbox | `transaction.TransferConsumer` |
+| `payment.wallet.credits` | `WalletCreditedEvent` | módulo `wallet` via outbox | `transaction.TransferConsumer` |
+| `payment.transfer.status` | `TransferStatusChangedEvent` | módulo `transaction` via outbox | `transfer.TransferStatusConsumer` |
+| `payment.deposit.completed` | `DepositCompletedEvent` | módulo `wallet` via outbox | `transaction.DepositConsumer` |
 
-## Runtime rules worth preserving
+## Regras de runtime que valem preservar
 
-- Ownership is enforced through `SecurityUtils.requireOwnership(...)`, not by repository filtering.
-- Rate limiting is optional and attached only when the filter bean is available.
-- Kafka consumer retries are configured in `KafkaConsumerConfig` with `FixedBackOff` before DLT publishing.
-- Outbox relay waits synchronously for Kafka ack per record and marks exhausted records as processed after recovery.
-- Stripe deposit creation uses Resilience4j retry and circuit breaker with a shared fallback.
-- `PaymentProviderName` currently supports only `STRIPE`.
+- Ownership é aplicado por meio de `SecurityUtils.requireOwnership(...)`, não por filtragem no repositório.
+- A limitação de taxa é opcional e só é anexada quando o bean do filtro está disponível.
+- As tentativas de retry dos consumers Kafka são configuradas em `KafkaConsumerConfig` com `FixedBackOff` antes da publicação em DLT.
+- O relay da outbox aguarda de forma síncrona o ack do Kafka por registro e marca registros esgotados como processados após a recuperação.
+- A criação de depósitos com Stripe usa retry e circuit breaker do Resilience4j com fallback compartilhado.
+- `PaymentProviderName` atualmente suporta apenas `STRIPE`.
 
-## Operational files
+## Arquivos operacionais
 
-| File | Purpose |
+| Arquivo | Finalidade |
 |---|---|
-| `src/main/resources/application.yaml` | Main runtime configuration, Kafka, Redis, rate limit and Resilience4j |
-| `src/main/resources/logback-spring.xml` | Console logging pattern |
-| `docker-compose.yml` | Local stack with app, postgres, kafka, redis, prometheus and grafana |
-| `prometheus.yml` | Scrape config for `payment-service:8080/actuator/prometheus` |
-| `grafana/provisioning/datasources/prometheus.yml` | Grafana datasource provisioning |
-| `grafana/provisioning/dashboards/dashboards.yml` | Grafana dashboard provisioning |
-| `seed.sh` | Local seed flow with sample users and transfers |
-| `load.sh` | Simple transfer load generator |
+| `src/main/resources/application.yaml` | Configuração principal de runtime, Kafka, Redis, rate limit e Resilience4j |
+| `src/main/resources/logback-spring.xml` | Padrão de logs no console |
+| `docker-compose.yml` | Stack local com app, postgres, kafka, redis, prometheus e grafana |
+| `prometheus.yml` | Configuração de scrape para `payment-service:8080/actuator/prometheus` |
+| `grafana/provisioning/datasources/prometheus.yml` | Provisionamento de datasource do Grafana |
+| `grafana/provisioning/dashboards/dashboards.yml` | Provisionamento de dashboards do Grafana |
+| `seed.sh` | Fluxo local de carga inicial com usuários e transferências de exemplo |
+| `load.sh` | Gerador simples de carga para transferências |

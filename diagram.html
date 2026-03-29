@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Service — Diagramas de Fluxo</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0c1220;
+            --card: #151d30;
+            --card2: #1a2440;
+            --border: #1e2a45;
+            --fg: #e2e8f0;
+            --fg2: #cbd5e1;
+            --muted: #64748b;
+            --accent: #00d4aa;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #06b6d4;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        [data-theme="light"] {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --card2: #f1f5f9;
+            --border: #e2e8f0;
+            --fg: #0f172a;
+            --fg2: #334155;
+            --muted: #64748b;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 25% 15%, rgba(0,212,170,0.05) 0%, transparent 55%),
+                radial-gradient(ellipse at 75% 85%, rgba(245,158,11,0.04) 0%, transparent 55%),
+                radial-gradient(ellipse at 50% 50%, rgba(6,182,212,0.02) 0%, transparent 60%);
+            z-index: -1;
+            animation: bgPulse 25s ease-in-out infinite alternate;
+        }
+
+        [data-theme="light"] body::before {
+            background:
+                radial-gradient(ellipse at 25% 15%, rgba(0,212,170,0.03) 0%, transparent 55%),
+                radial-gradient(ellipse at 75% 85%, rgba(245,158,11,0.02) 0%, transparent 55%),
+                radial-gradient(ellipse at 50% 50%, rgba(6,182,212,0.02) 0%, transparent 60%);
+        }
+        @keyframes bgPulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        header {
+            text-align: center;
+            padding: 44px 24px 12px;
+        }
+        header h1 {
+            font-size: 2.1rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, var(--fg) 40%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        header p {
+            color: var(--muted);
+            margin-top: 6px;
+            font-size: 0.92rem;
+            font-weight: 400;
+        }
+        nav.tabs {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 20px 24px 12px;
+            flex-wrap: wrap;
+        }
+        nav.tabs button {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 500;
+            padding: 10px 22px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--muted);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        nav.tabs button:hover { 
+            color: var(--fg2); 
+            border-color: #334155; 
+            transform: translateY(-2px);
+        }
+
+        nav.tabs button.active-transfer { 
+            color: #00d4aa; 
+            border-color: #00d4aa; 
+            background: rgba(0,212,170,0.1); 
+            box-shadow: 0 4px 15px rgba(0,212,170,0.2);
+        }
+
+        nav.tabs button.active-deposit { 
+            color: #f59e0b; 
+            border-color: #f59e0b; 
+            background: rgba(245,158,11,0.1); 
+            box-shadow: 0 4px 15px rgba(245,158,11,0.2);
+        }
+
+        nav.tabs button.active-auth { 
+            color: #ef4444; 
+            border-color: #ef4444; 
+            background: rgba(239,68,68,0.1); 
+            box-shadow: 0 4px 15px rgba(239,68,68,0.2);
+        }
+
+        nav.tabs button.active-arch { 
+            color: #06b6d4; 
+            border-color: #06b6d4; 
+            background: rgba(6,182,212,0.1); 
+            box-shadow: 0 4px 15px rgba(6,182,212,0.2);
+        }
+        nav.tabs button i { margin-right: 7px; font-size: 0.82rem; }
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 8px 24px 60px;
+        }
+        .panel { display: none; animation: fadeUp 0.35s ease; }
+        .panel.active { display: block; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .panel-header h2 { font-size: 1.2rem; font-weight: 600; }
+        .legend { display: flex; gap: 14px; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--muted); }
+        .legend-sw { width: 16px; height: 10px; border-radius: 2px; border: 2px solid; flex-shrink: 0; }
+        .legend-sw.filled { border: none; }
+        .diagram-wrap {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: auto;
+            max-height: 88vh;
+        }
+        .diagram-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+        .diagram-wrap::-webkit-scrollbar-track { background: transparent; }
+        .diagram-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .diagram-wrap svg { display: block; width: 100%; min-width: 680px; height: auto; }
+        .step { cursor: default; }
+        .step rect { transition: filter 0.2s ease; }
+        .step:hover rect { filter: brightness(1.25); }
+        .step.highlighted rect {
+            filter: brightness(1.4);
+            stroke-width: 3;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--card);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--fg) 40%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            width: 280px;
+            padding: 8px 12px 8px 36px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 10px 30px var(--shadow);
+        }
+
+        .search-results.active { display: block; }
+
+        .search-result-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s ease;
+        }
+
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: var(--card2); }
+
+        .search-result-item .label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .search-result-item .name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--fg);
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--fg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .btn-icon:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Diagram Container */
+        .diagram-container {
+            position: relative;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .diagram-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--card2);
+        }
+
+        .diagram-toolbar button {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card);
+            color: var(--fg);
+            font-family: inherit;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .diagram-toolbar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .diagram-toolbar .zoom-level {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--muted);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .diagram-toolbar .divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            margin: 0 4px;
+        }
+
+        .diagram-wrap {
+            overflow: auto;
+            max-height: 75vh;
+            position: relative;
+        }
+
+        .diagram-wrap svg {
+            display: block;
+            width: 100%;
+            min-width: 680px;
+            height: auto;
+            transform-origin: center top;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: modalIn 0.3s ease;
+            position: relative;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal h3 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card2);
+            color: var(--fg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shortcut-list { display: grid; gap: 12px; }
+
+        .shortcut-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .shortcut-item:last-child { border-bottom: none; }
+
+        .shortcut-keys { display: flex; gap: 6px; }
+
+        .kbd {
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card2);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--fg);
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1001;
+        }
+
+        .toast {
+            padding: 14px 20px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastIn 0.3s ease;
+            box-shadow: 0 10px 30px var(--shadow);
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .toast.success { border-left: 3px solid var(--accent); }
+        .toast.info { border-left: 3px solid var(--info); }
+        .toast.error { border-left: 3px solid var(--danger); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .top-bar { flex-direction: column; gap: 12px; }
+            .search-box input { width: 200px; }
+        }
+
+        @media (max-width: 480px) {
+            .search-box { display: none; }
+            .diagram-toolbar .zoom-level { display: none; }
+        }
+
+        /* Print styles */
+        @media print {
+            .top-bar, .diagram-toolbar, nav.tabs { display: none; }
+            .panel { display: block !important; page-break-after: always; }
+            body { background: white; color: black; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar with Search & Controls -->
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <div class="logo"><i class="fas fa-project-diagram"></i> Payment Service</div>
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar componente..." autocomplete="off">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+        </div>
+        <div class="top-bar-right">
+            <button class="btn-icon" id="themeToggle" title="Alternar tema (T)">
+                <i class="fas fa-sun"></i>
+            </button>
+            <button class="btn-icon" id="keyboardShortcuts" title="Atalhos (?)">
+                <i class="fas fa-keyboard"></i>
+            </button>
+        </div>
+    </div>
+
+    <header>
+        <h1>Payment Service</h1>
+        <p>Diagramas de fluxo da aplicação de pagamentos</p>
+    </header>
+
+    <nav class="tabs" role="tablist">
+        <button class="active-transfer" data-tab="transfer" role="tab" aria-selected="true"><i class="fas fa-exchange-alt"></i>Transferência</button>
+        <button data-tab="deposit" role="tab" aria-selected="false"><i class="fas fa-plus-circle"></i>Depósito</button>
+        <button data-tab="auth" role="tab" aria-selected="false"><i class="fas fa-shield-alt"></i>Autenticação</button>
+        <button data-tab="arch" role="tab" aria-selected="false"><i class="fas fa-cubes"></i>Arquitetura</button>
+    </nav>
+
+    <main>
+        <!-- ==================== TRANSFER ==================== -->
+        <section id="transfer" class="panel active" role="tabpanel">
+            <div class="panel-header">
+                <h2>Ciclo de Vida da Transferência</h2>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#00d4aa"></div>Endpoint</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#00d4aa"></div>Serviço</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#00d4aa;background:rgba(0,212,170,0.1)"></div>Dados</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#f59e0b;border-style:dashed;background:rgba(245,158,11,0.1)"></div>Kafka (async)</div>
+                </div>
+            </div>
+            <div class="diagram-wrap">
+                <svg viewBox="0 0 940 1160" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="dg1" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r=".5" fill="rgba(255,255,255,0.035)"/></pattern>
+                        <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#00d4aa"/></marker>
+                        <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#f59e0b"/></marker>
+                        <filter id="gt"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#00d4aa" flood-opacity="0.35"/></filter>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#dg1)"/>
+
+                    <!-- Zona assíncrona -->
+                    <rect x="55" y="505" width="830" height="480" rx="10" fill="rgba(245,158,11,0.025)" stroke="rgba(245,158,11,0.07)" stroke-width="1" stroke-dasharray="5,4"/>
+                    <text x="78" y="525" font-family="Space Grotesk,sans-serif" fill="#f59e0b" font-size="9" opacity="0.5" letter-spacing="0.1em">ZONA ASSÍNCRONA — KAFKA</text>
+
+                    <!-- Step 1 -->
+                    <g class="step"><rect x="160" y="40" width="280" height="50" rx="8" fill="#00d4aa" filter="url(#gt)"/>
+                        <text x="300" y="65" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">POST /transfers</text>
+                    </g>
+                    <circle cx="132" cy="65" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="132" y="65" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">1</text>
+
+                    <line x1="300" y1="90" x2="300" y2="157" stroke="#00d4aa" stroke-width="1.8" marker-end="url(#at)"/>
+                    <text x="314" y="128" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9.5">requireOwnership</text>
+
+                    <!-- Step 2 -->
+                    <g class="step"><rect x="160" y="160" width="280" height="50" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="185" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">TransferController</text>
+                    </g>
+                    <circle cx="132" cy="185" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="132" y="185" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">2</text>
+
+                    <line x1="300" y1="210" x2="300" y2="277" stroke="#00d4aa" stroke-width="1.8" marker-end="url(#at)"/>
+
+                    <!-- Step 3 -->
+                    <g class="step"><rect x="160" y="280" width="280" height="50" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="305" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">CreateTransferService</text>
+                    </g>
+                    <circle cx="132" cy="305" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="132" y="305" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">3</text>
+                    <!-- Anotação 3 -->
+                    <line x1="440" y1="305" x2="508" y2="305" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+                    <rect x="510" y="280" width="370" height="50" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="524" y="299" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Salva TransferEntity(PENDING)</text>
+                    <text x="524" y="316" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">+ OutboxEntity(TRANSFER_CREATED)</text>
+
+                    <line x1="300" y1="330" x2="300" y2="397" stroke="#00d4aa" stroke-width="1.8" marker-end="url(#at)"/>
+
+                    <!-- Step 4 -->
+                    <g class="step"><rect x="160" y="400" width="280" height="50" rx="8" fill="rgba(0,212,170,0.08)" stroke="#00d4aa" stroke-width="1.4"/>
+                        <text x="300" y="425" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">TransferEntity (PENDING)</text>
+                    </g>
+                    <circle cx="132" cy="425" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="132" y="425" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">4</text>
+
+                    <line x1="300" y1="450" x2="300" y2="535" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#am)"/>
+
+                    <!-- Step 5: Kafka -->
+                    <g class="step"><rect x="140" y="538" width="320" height="50" rx="8" fill="rgba(245,158,11,0.08)" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="6,3"/>
+                        <text x="300" y="556" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="10.5" font-weight="600" text-anchor="middle" dominant-baseline="central">KAFKA</text>
+                        <text x="300" y="574" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="9.5" text-anchor="middle" dominant-baseline="central">payment.transfer.created</text>
+                    </g>
+                    <circle cx="112" cy="563" r="12" fill="rgba(245,158,11,0.12)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="112" y="563" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">5</text>
+                    <!-- Anotação 5 -->
+                    <line x1="460" y1="563" x2="508" y2="563" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+                    <rect x="510" y="543" width="370" height="40" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="524" y="567" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">OutboxPublisher — Pattern: Transactional Outbox</text>
+
+                    <line x1="300" y1="588" x2="300" y2="653" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#am)"/>
+
+                    <!-- Step 6 -->
+                    <g class="step"><rect x="160" y="656" width="280" height="50" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="681" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">TransferWalletConsumer</text>
+                    </g>
+                    <circle cx="132" cy="681" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="132" y="681" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">6</text>
+
+                    <line x1="300" y1="706" x2="300" y2="773" stroke="#00d4aa" stroke-width="1.8" marker-end="url(#at)"/>
+
+                    <!-- Step 7 -->
+                    <g class="step"><rect x="140" y="776" width="320" height="54" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="795" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">ProcessTransferService</text>
+                        <text x="300" y="814" font-family="JetBrains Mono,monospace" fill="#64748b" font-size="9.5" text-anchor="middle" dominant-baseline="central">lock ordering · debit · credit</text>
+                    </g>
+                    <circle cx="112" cy="803" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="112" y="803" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">7</text>
+                    <!-- Anotação 7 -->
+                    <line x1="460" y1="800" x2="508" y2="800" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+                    <rect x="510" y="775" width="370" height="56" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="524" y="794" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Lock ordering por walletId (deadlock-free)</text>
+                    <text x="524" y="810" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Débito origem + Crédito destino</text>
+                    <text x="524" y="825" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9.5">Salva ProcessedTransferEntity + Outbox</text>
+
+                    <line x1="300" y1="830" x2="300" y2="895" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#am)"/>
+
+                    <!-- Step 8: Kafka -->
+                    <g class="step"><rect x="140" y="898" width="320" height="50" rx="8" fill="rgba(245,158,11,0.08)" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="6,3"/>
+                        <text x="300" y="916" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="10.5" font-weight="600" text-anchor="middle" dominant-baseline="central">KAFKA</text>
+                        <text x="300" y="934" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="9.5" text-anchor="middle" dominant-baseline="central">payment.wallet.debits / credits</text>
+                    </g>
+                    <circle cx="112" cy="923" r="12" fill="rgba(245,158,11,0.12)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="112" y="923" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">8</text>
+
+                    <line x1="300" y1="948" x2="300" y2="1013" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#am)"/>
+
+                    <!-- Step 9 -->
+                    <g class="step"><rect x="140" y="1016" width="320" height="50" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="1035" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="11.5" font-weight="500" text-anchor="middle" dominant-baseline="central">TransferConsumer</text>
+                        <text x="300" y="1053" font-family="JetBrains Mono,monospace" fill="#64748b" font-size="9.5" text-anchor="middle" dominant-baseline="central">CreateTransactionService</text>
+                    </g>
+                    <circle cx="112" cy="1041" r="12" fill="rgba(0,212,170,0.12)" stroke="#00d4aa" stroke-width="1.2"/>
+                    <text x="112" y="1041" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">9</text>
+
+                    <line x1="300" y1="1066" x2="300" y2="1093" stroke="#00d4aa" stroke-width="1.8" marker-end="url(#at)"/>
+
+                    <!-- Step 10: Final -->
+                    <g class="step"><rect x="200" y="1096" width="200" height="44" rx="8" fill="#00d4aa" filter="url(#gt)"/>
+                        <text x="300" y="1118" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="central">COMPLETED</text>
+                    </g>
+                </svg>
+            </div>
+        </section>
+
+        <!-- ==================== DEPOSIT ==================== -->
+        <section id="deposit" class="panel" role="tabpanel">
+            <div class="panel-header">
+                <h2>Fluxo de Depósito via Stripe</h2>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#f59e0b"></div>Endpoint</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#f59e0b"></div>Serviço</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#94a3b8;border-style:dashed;background:rgba(148,163,184,0.08)"></div>Externo</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#6366f1;border-style:dashed;background:rgba(99,102,241,0.08)"></div>Frontend (implementar)</div>
+                </div>
+            </div>
+            <div class="diagram-wrap">
+                <svg viewBox="0 0 1200 850" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="dg2" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r=".5" fill="rgba(255,255,255,0.035)"/></pattern>
+                        <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#f59e0b"/></marker>
+                        <marker id="ae" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#94a3b8"/></marker>
+                        <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#6366f1"/></marker>
+                        <filter id="gd"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#f59e0b" flood-opacity="0.35"/></filter>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#dg2)"/>
+
+                                        <!-- LEFT COLUMN: FRONTEND ZONE -->
+                    <rect x="20" y="40" width="260" height="780" rx="12" fill="rgba(99,102,241,0.04)" stroke="rgba(99,102,241,0.2)" stroke-width="1.5" stroke-dasharray="6,4"/>
+                    <text x="150" y="30" font-family="Space Grotesk,sans-serif" fill="#6366f1" font-size="12" font-weight="600" text-anchor="middle">FRONTEND � IMPLEMENTAR</text>
+                    <text x="150" y="815" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9" text-anchor="middle">?? N�o incluso neste projeto</text>
+
+                    <!-- F1: DepositForm -->
+                    <g class="step"><rect x="40" y="60" width="220" height="55" rx="8" fill="rgba(99,102,241,0.1)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5,3"/>
+                        <text x="150" y="87" font-family="JetBrains Mono,monospace" fill="#818cf8" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">DepositForm</text>
+                        <text x="150" y="105" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9" text-anchor="middle" dominant-baseline="central">Component React/Vue</text>
+                    </g>
+                    <circle cx="35" cy="87" r="12" fill="rgba(99,102,241,0.2)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="35" y="87" font-family="JetBrains Mono,monospace" fill="#6366f1" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">F1</text>
+
+                    <!-- F2: StripeProvider -->
+                    <g class="step"><rect x="40" y="180" width="220" height="55" rx="8" fill="rgba(99,102,241,0.1)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5,3"/>
+                        <text x="150" y="207" font-family="JetBrains Mono,monospace" fill="#818cf8" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">StripeProvider</text>
+                        <text x="150" y="225" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9" text-anchor="middle" dominant-baseline="central">Elements wrapper</text>
+                    </g>
+                    <circle cx="35" cy="207" r="12" fill="rgba(99,102,241,0.2)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="35" y="207" font-family="JetBrains Mono,monospace" fill="#6366f1" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">F2</text>
+
+                    <!-- F3: PaymentStatus -->
+                    <g class="step"><rect x="40" y="600" width="220" height="55" rx="8" fill="rgba(99,102,241,0.1)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5,3"/>
+                        <text x="150" y="627" font-family="JetBrains Mono,monospace" fill="#818cf8" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">PaymentStatus</text>
+                        <text x="150" y="645" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9" text-anchor="middle" dominant-baseline="central">Polling / WebSocket</text>
+                    </g>
+                    <circle cx="35" cy="627" r="12" fill="rgba(99,102,241,0.2)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="35" y="627" font-family="JetBrains Mono,monospace" fill="#6366f1" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">F3</text>
+
+                    <!-- F4: DepositFeedback -->
+                    <g class="step"><rect x="40" y="720" width="220" height="55" rx="8" fill="rgba(99,102,241,0.1)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5,3"/>
+                        <text x="150" y="747" font-family="JetBrains Mono,monospace" fill="#818cf8" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">DepositFeedback</text>
+                        <text x="150" y="765" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9" text-anchor="middle" dominant-baseline="central">Success / Error UI</text>
+                    </g>
+                    <circle cx="35" cy="747" r="12" fill="rgba(99,102,241,0.2)" stroke="#6366f1" stroke-width="1.2"/>
+                    <text x="35" y="747" font-family="JetBrains Mono,monospace" fill="#6366f1" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">F4</text>
+
+                    <!-- RIGHT COLUMN: EXTERNAL ZONE -->
+                    <rect x="920" y="180" width="260" height="280" rx="12" fill="rgba(148,163,184,0.03)" stroke="rgba(148,163,184,0.15)" stroke-width="1.5" stroke-dasharray="5,4"/>
+                    <text x="1050" y="170" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="11" font-weight="600" text-anchor="middle">ZONA EXTERNA</text>
+
+                    <!-- Step 3: Stripe API -->
+                    <g class="step"><rect x="940" y="200" width="220" height="60" rx="8" fill="rgba(148,163,184,0.08)" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3"/>
+                        <text x="1050" y="227" font-family="JetBrains Mono,monospace" fill="#94a3b8" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">Stripe API</text>
+                        <text x="1050" y="247" font-family="JetBrains Mono,monospace" fill="#64748b" font-size="10" text-anchor="middle" dominant-baseline="central">PaymentIntent.create()</text>
+                    </g>
+                    <circle cx="935" cy="230" r="12" fill="rgba(148,163,184,0.15)" stroke="#94a3b8" stroke-width="1.2"/>
+                    <text x="935" y="230" font-family="JetBrains Mono,monospace" fill="#94a3b8" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">3</text>
+
+                    <!-- Step 5: Stripe Elements -->
+                    <g class="step"><rect x="940" y="360" width="220" height="60" rx="8" fill="rgba(148,163,184,0.08)" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3"/>
+                        <text x="1050" y="387" font-family="JetBrains Mono,monospace" fill="#94a3b8" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">Stripe Elements</text>
+                        <text x="1050" y="407" font-family="JetBrains Mono,monospace" fill="#64748b" font-size="10" text-anchor="middle" dominant-baseline="central">Usu�rio paga</text>
+                    </g>
+                    <circle cx="935" cy="390" r="12" fill="rgba(148,163,184,0.15)" stroke="#94a3b8" stroke-width="1.2"/>
+                    <text x="935" y="390" font-family="JetBrains Mono,monospace" fill="#94a3b8" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">5</text>
+
+                    <!-- CENTER: BACKEND FLOW -->
+                    <text x="600" y="30" font-family="Space Grotesk,sans-serif" fill="#f59e0b" font-size="12" font-weight="600" text-anchor="middle">BACKEND � Este Projeto</text>
+
+                    <!-- Step 1: POST /wallets/{id}/deposits -->
+                    <g class="step"><rect x="450" y="60" width="300" height="55" rx="8" fill="#f59e0b" filter="url(#gd)"/>
+                        <text x="600" y="92" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">POST /wallets/{id}/deposits</text>
+                    </g>
+                    <circle cx="435" cy="87" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="435" y="87" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">1</text>
+
+                    <!-- Step 2: CreateDepositService -->
+                    <g class="step"><rect x="450" y="180" width="300" height="55" rx="8" fill="#151d30" stroke="#f59e0b" stroke-width="2"/>
+                        <text x="600" y="212" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="13" font-weight="500" text-anchor="middle" dominant-baseline="central">CreateDepositService</text>
+                    </g>
+                    <circle cx="435" cy="207" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="435" y="207" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">2</text>
+
+                    <!-- Step 4: Return clientSecret -->
+                    <g class="step"><rect x="450" y="340" width="300" height="55" rx="8" fill="#f59e0b" filter="url(#gd)"/>
+                        <text x="600" y="372" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">{ clientSecret }</text>
+                    </g>
+                    <circle cx="435" cy="367" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="435" y="367" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">4</text>
+
+                    <!-- Step 6: Webhook -->
+                    <g class="step"><rect x="450" y="500" width="300" height="55" rx="8" fill="#f59e0b" filter="url(#gd)"/>
+                        <text x="600" y="532" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">POST /webhooks/deposits</text>
+                    </g>
+                    <circle cx="435" cy="527" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="435" y="527" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">6</text>
+
+                    <!-- Step 7: ProcessDepositService -->
+                    <g class="step"><rect x="450" y="600" width="300" height="55" rx="8" fill="#151d30" stroke="#f59e0b" stroke-width="2"/>
+                        <text x="600" y="632" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="13" font-weight="500" text-anchor="middle" dominant-baseline="central">ProcessDepositService</text>
+                    </g>
+                    <circle cx="435" cy="627" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="435" y="627" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">7</text>
+
+                    <!-- Step 8: Kafka -->
+                    <g class="step"><rect x="470" y="700" width="260" height="50" rx="8" fill="rgba(245,158,11,0.1)" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,3"/>
+                        <text x="600" y="722" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">KAFKA</text>
+                        <text x="600" y="740" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">payment.deposit.processed</text>
+                    </g>
+                    <circle cx="455" cy="725" r="12" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="1.2"/>
+                    <text x="455" y="725" font-family="JetBrains Mono,monospace" fill="#f59e0b" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">8</text>
+
+                    <!-- Final -->
+                    <g class="step"><rect x="500" y="785" width="200" height="45" rx="8" fill="#f59e0b" filter="url(#gd)"/>
+                        <text x="600" y="810" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central">DEPOSIT_COMPLETED</text>
+                    </g>
+
+                    <!-- FLOW ARROWS -->
+                    <!-- F1 ? Step 1 -->
+                    <line x1="260" y1="87" x2="450" y2="87" stroke="#6366f1" stroke-width="2" marker-end="url(#af)"/>
+                    <text x="355" y="80" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">chama API</text>
+
+                    <!-- Step 1 ? Step 2 -->
+                    <line x1="600" y1="115" x2="600" y2="180" stroke="#f59e0b" stroke-width="2" marker-end="url(#ad)"/>
+
+                    <!-- Step 2 ? Step 3 (Stripe) -->
+                    <line x1="750" y1="207" x2="940" y2="230" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ae)"/>
+                    <text x="845" y="215" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">cria PaymentIntent</text>
+
+                    <!-- Step 3 ? Step 4 (return clientSecret) -->
+                    <path d="M940,250 Q 800,310 750,367" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ae)"/>
+                    <text x="870" y="300" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">retorna clientSecret</text>
+
+                    <!-- Step 4 ? F2 (send to frontend) -->
+                    <path d="M450,367 Q 350,290 260,235" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#af)"/>
+                    <text x="350" y="320" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">envia para frontend</text>
+
+                    <!-- F2 ? Step 5 (Stripe Elements) -->
+                    <path d="M260,207 Q 600,207 940,390" fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#af)"/>
+                    <text x="600" y="200" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">mount Elements + confirmPayment</text>
+
+                    <!-- Step 5 ? Step 6 (webhook) -->
+                    <path d="M940,420 Q 800,470 750,527" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ae)"/>
+                    <text x="870" y="460" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">webhook event</text>
+
+                    <!-- Step 6 ? Step 7 -->
+                    <line x1="600" y1="555" x2="600" y2="600" stroke="#f59e0b" stroke-width="2" marker-end="url(#ad)"/>
+
+                    <!-- Step 7 annotation -->
+                    <rect x="760" y="600" width="320" height="55" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="775" y="620" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10">wallet.setBalance(amount)</text>
+                    <text x="775" y="635" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10">+ OutboxEntity(DEPOSIT_PROCESSED)</text>
+                    <text x="775" y="650" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">Stripe signature verification</text>
+                    <line x1="750" y1="627" x2="760" y2="627" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+
+                    <!-- Step 7 ? Step 8 -->
+                    <line x1="600" y1="655" x2="600" y2="700" stroke="#f59e0b" stroke-width="2" marker-end="url(#ad)"/>
+
+                    <!-- Step 8 ? Final -->
+                    <line x1="600" y1="750" x2="600" y2="785" stroke="#f59e0b" stroke-width="2" marker-end="url(#ad)"/>
+
+                    <!-- Step 7 ? F3 (status update) -->
+                    <path d="M450,627 Q 300,627 260,627" fill="none" stroke="#6366f1" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#af)"/>
+                    <text x="355" y="615" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">atualiza status</text>
+
+                    <!-- F3 ? F4 -->
+                    <line x1="150" y1="655" x2="150" y2="720" stroke="#6366f1" stroke-width="2" marker-end="url(#af)"/>
+                    <text x="155" y="690" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9">mostra resultado</text>
+                </svg>
+            </div>
+        </section>
+
+        <!-- ==================== AUTH ==================== -->
+        <section id="auth" class="panel" role="tabpanel">
+            <div class="panel-header">
+                <h2>Fluxo de Autenticação JWT + Redis</h2>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#ef4444"></div>Endpoint</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#ef4444"></div>Serviço / Componente</div>
+                    <div class="legend-item"><div class="legend-sw" style="border-color:#ef4444;border-style:dashed;background:rgba(239,68,68,0.08)"></div>Redis</div>
+                </div>
+            </div>
+            <div class="diagram-wrap">
+                <svg viewBox="0 0 1200 850" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="dg3" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r=".5" fill="rgba(255,255,255,0.035)"/></pattern>
+                        <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#ef4444"/></marker>
+                        <filter id="ga"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ef4444" flood-opacity="0.35"/></filter>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#dg3)"/>
+
+                    <!-- Zona de interceptação -->
+                    <rect x="55" y="415" width="830" height="280" rx="10" fill="rgba(239,68,68,0.02)" stroke="rgba(239,68,68,0.07)" stroke-width="1" stroke-dasharray="5,4"/>
+                    <text x="78" y="435" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="9" opacity="0.5" letter-spacing="0.1em">INTERCEPTAÇÃO — TODAS AS REQUESTS</text>
+
+                    <!-- === FLUXO LOGIN === -->
+                    <text x="300" y="55" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="10" font-weight="600" letter-spacing="0.08em" opacity="0.6">FLUXO DE LOGIN</text>
+
+                    <!-- Step L1 -->
+                    <g class="step"><rect x="160" y="70" width="280" height="50" rx="8" fill="#ef4444" filter="url(#ga)"/>
+                        <text x="300" y="95" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">POST /auth/login</text>
+                    </g>
+                    <circle cx="132" cy="95" r="12" fill="rgba(239,68,68,0.12)" stroke="#ef4444" stroke-width="1.2"/>
+                    <text x="132" y="95" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">L1</text>
+
+                    <line x1="300" y1="120" x2="300" y2="183" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+
+                    <!-- Step L2 -->
+                    <g class="step"><rect x="160" y="186" width="280" height="50" rx="8" fill="#151d30" stroke="#ef4444" stroke-width="1.8"/>
+                        <text x="300" y="211" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">AuthService.authenticate</text>
+                    </g>
+                    <circle cx="132" cy="211" r="12" fill="rgba(239,68,68,0.12)" stroke="#ef4444" stroke-width="1.2"/>
+                    <text x="132" y="211" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">L2</text>
+                    <!-- Anotação L2 -->
+                    <line x1="440" y1="211" x2="508" y2="211" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+                    <rect x="510" y="190" width="360" height="42" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="524" y="208" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Valida credenciais (BCrypt)</text>
+                    <text x="524" y="223" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">UserDetailsService + PasswordEncoder</text>
+
+                    <line x1="300" y1="236" x2="300" y2="299" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+
+                    <!-- Step L3 -->
+                    <g class="step"><rect x="160" y="302" width="280" height="50" rx="8" fill="#151d30" stroke="#ef4444" stroke-width="1.8"/>
+                        <text x="300" y="327" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">JwtService.generateToken</text>
+                    </g>
+                    <circle cx="132" cy="327" r="12" fill="rgba(239,68,68,0.12)" stroke="#ef4444" stroke-width="1.2"/>
+                    <text x="132" y="327" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">L3</text>
+                    <!-- Anotação L3 -->
+                    <line x1="440" y1="327" x2="508" y2="327" stroke="#1e2a45" stroke-width="1" stroke-dasharray="3,3"/>
+                    <rect x="510" y="306" width="360" height="42" rx="6" fill="#1a2440" stroke="#1e2a45" stroke-width="1"/>
+                    <text x="524" y="324" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Header: { alg, typ, kid }</text>
+                    <text x="524" y="339" font-family="Space Grotesk,sans-serif" fill="#94a3b8" font-size="10.5">Payload: { sub, iat, exp, jti, roles }</text>
+
+                    <line x1="300" y1="352" x2="300" y2="389" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+
+                    <!-- Step L4: Retorno -->
+                    <g class="step"><rect x="170" y="388" width="260" height="20" rx="4" fill="transparent"/>
+                        <text x="300" y="402" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="11" font-weight="600" text-anchor="middle">return { token, expiresIn }</text>
+                    </g>
+
+                    <!-- === FLUXO DE VALIDAÇÃO === -->
+                    <text x="300" y="460" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="10" font-weight="600" letter-spacing="0.08em" opacity="0.6">VALIDAÇÃO EM CADA REQUEST</text>
+
+                    <!-- Step V1 -->
+                    <g class="step"><rect x="120" y="475" width="360" height="50" rx="8" fill="#151d30" stroke="#ef4444" stroke-width="1.8"/>
+                        <text x="300" y="500" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">JwtAuthenticationFilter</text>
+                    </g>
+                    <circle cx="92" cy="500" r="12" fill="rgba(239,68,68,0.12)" stroke="#ef4444" stroke-width="1.2"/>
+                    <text x="92" y="500" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">V1</text>
+
+                    <line x1="300" y1="525" x2="300" y2="568" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+                    <text x="314" y="551" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="9.5">validateToken</text>
+
+                    <!-- Step V2: Decisão -->
+                    <g class="step">
+                        <polygon points="300,570 380,610 300,650 220,610" fill="#151d30" stroke="#ef4444" stroke-width="1.8"/>
+                        <text x="300" y="612" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="10" font-weight="500" text-anchor="middle" dominant-baseline="central">valid?</text>
+                    </g>
+
+                    <!-- Ramo SIM -->
+                    <line x1="300" y1="650" x2="300" y2="678" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+                    <text x="310" y="668" font-family="Space Grotesk,sans-serif" fill="#00d4aa" font-size="9.5" font-weight="600">SIM</text>
+
+                    <!-- Step V3: Redis blacklist check -->
+                    <g class="step"><rect x="120" y="681" width="360" height="50" rx="8" fill="rgba(239,68,68,0.06)" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="6,3"/>
+                        <text x="300" y="700" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="10.5" font-weight="600" text-anchor="middle" dominant-baseline="central">Redis</text>
+                        <text x="300" y="718" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="9.5" text-anchor="middle" dominant-baseline="central">EXISTS blacklist:{jti}</text>
+                    </g>
+
+                    <!-- Ramo NÃO blacklist -->
+                    <line x1="300" y1="731" x2="300" y2="760" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+                    <text x="310" y="749" font-family="Space Grotesk,sans-serif" fill="#00d4aa" font-size="9.5" font-weight="600">NÃO</text>
+
+                    <!-- Step V4 -->
+                    <g class="step"><rect x="140" y="763" width="320" height="50" rx="8" fill="#151d30" stroke="#00d4aa" stroke-width="1.8"/>
+                        <text x="300" y="788" font-family="JetBrains Mono,monospace" fill="#e2e8f0" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="central">SecurityContext</text>
+                        <text x="300" y="803" font-family="JetBrains Mono,monospace" fill="#64748b" font-size="9" text-anchor="middle" dominant-baseline="central">setAuthentication(token)</text>
+                    </g>
+
+                    <!-- Ramo NÃO valid → 401 -->
+                    <line x1="380" y1="610" x2="530" y2="610" stroke="#ef4444" stroke-width="1.3" marker-end="url(#aa)"/>
+                    <text x="440" y="603" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="9.5" font-weight="600">NÃO</text>
+                    <g class="step"><rect x="532" y="592" width="160" height="36" rx="6" fill="rgba(239,68,68,0.15)" stroke="#ef4444" stroke-width="1.2"/>
+                        <text x="612" y="614" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="11" font-weight="600" text-anchor="middle" dominant-baseline="central">401 UNAUTHORIZED</text>
+                    </g>
+
+                    <!-- Ramo SIM blacklist → 401 -->
+                    <line x1="480" y1="706" x2="530" y2="680" stroke="#ef4444" stroke-width="1.3" marker-end="url(#aa)"/>
+                    <text x="518" y="698" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="9.5" font-weight="600">SIM</text>
+                    <g class="step"><rect x="532" y="656" width="160" height="36" rx="6" fill="rgba(239,68,68,0.15)" stroke="#ef4444" stroke-width="1.2"/>
+                        <text x="612" y="678" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="11" font-weight="600" text-anchor="middle" dominant-baseline="central">401 TOKEN REVOKED</text>
+                    </g>
+
+                    <!-- === FLUXO LOGOUT === -->
+                    <text x="300" y="870" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="10" font-weight="600" letter-spacing="0.08em" opacity="0.6">FLUXO DE LOGOUT</text>
+
+                    <!-- Step O1 -->
+                    <g class="step"><rect x="160" y="885" width="280" height="50" rx="8" fill="#ef4444" filter="url(#ga)"/>
+                        <text x="300" y="910" font-family="JetBrains Mono,monospace" fill="#0c1220" font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central">POST /auth/logout</text>
+                    </g>
+                    <circle cx="132" cy="910" r="12" fill="rgba(239,68,68,0.12)" stroke="#ef4444" stroke-width="1.2"/>
+                    <text x="132" y="910" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="9" font-weight="600" text-anchor="middle" dominant-baseline="central">O1</text>
+
+                    <line x1="300" y1="935" x2="300" y2="956" stroke="#ef4444" stroke-width="1.8" marker-end="url(#aa)"/>
+
+                    <!-- Step O2: Redis set -->
+                    <g class="step"><rect x="60" y="959" width="480" height="34" rx="6" fill="rgba(239,68,68,0.06)" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="6,3"/>
+                        <text x="300" y="980" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="10" font-weight="500" text-anchor="middle" dominant-baseline="central">SET blacklist:{jti} — TTL = remaining token time</text>
+                    </g>
+                </svg>
+            </div>
+        </section>
+
+        <!-- ==================== ARCHITECTURE ==================== -->
+        <section id="arch" class="panel" role="tabpanel">
+            <div class="panel-header">
+                <h2>Bounded Contexts — Visão Estrutural</h2>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#ef4444"></div>Auth</div>
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#00d4aa"></div>Wallet</div>
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#06b6d4"></div>Transfer</div>
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#f59e0b"></div>Transaction</div>
+                    <div class="legend-item"><div class="legend-sw filled" style="background:#8b5cf6"></div>User</div>
+                </div>
+            </div>
+            <div class="diagram-wrap">
+                <svg viewBox="0 0 940 620" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="dg4" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r=".5" fill="rgba(255,255,255,0.035)"/></pattern>
+                        <marker id="ak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" fill="#f59e0b"/></marker>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#dg4)"/>
+
+                    <!-- ===== AUTH CONTEXT ===== -->
+                    <rect x="30" y="30" width="250" height="250" rx="14" fill="rgba(239,68,68,0.04)" stroke="rgba(239,68,68,0.25)" stroke-width="1.5"/>
+                    <rect x="30" y="30" width="250" height="36" rx="14" fill="rgba(239,68,68,0.12)"/>
+                    <rect x="30" y="52" width="250" height="14" fill="rgba(239,68,68,0.12)"/>
+                    <text x="155" y="53" font-family="Space Grotesk,sans-serif" fill="#ef4444" font-size="12" font-weight="600" text-anchor="middle">Auth Context</text>
+                    <!-- Componentes -->
+                    <rect x="50" y="82" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(239,68,68,0.3)" stroke-width="1"/>
+                    <text x="155" y="103" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">AuthService</text>
+                    <rect x="50" y="126" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(239,68,68,0.3)" stroke-width="1"/>
+                    <text x="155" y="147" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">JwtService</text>
+                    <rect x="50" y="170" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(239,68,68,0.3)" stroke-width="1"/>
+                    <text x="155" y="191" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">JwtAuthenticationFilter</text>
+                    <rect x="50" y="214" width="210" height="34" rx="6" fill="rgba(239,68,68,0.06)" stroke="rgba(239,68,68,0.3)" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="155" y="235" font-family="JetBrains Mono,monospace" fill="#ef4444" font-size="10" text-anchor="middle" dominant-baseline="central">Redis (blacklist)</text>
+
+                    <!-- ===== USER CONTEXT ===== -->
+                    <rect x="30" y="320" width="250" height="190" rx="14" fill="rgba(139,92,246,0.04)" stroke="rgba(139,92,246,0.25)" stroke-width="1.5"/>
+                    <rect x="30" y="320" width="250" height="36" rx="14" fill="rgba(139,92,246,0.12)"/>
+                    <rect x="30" y="342" width="250" height="14" fill="rgba(139,92,246,0.12)"/>
+                    <text x="155" y="343" font-family="Space Grotesk,sans-serif" fill="#8b5cf6" font-size="12" font-weight="600" text-anchor="middle">User Context</text>
+                    <rect x="50" y="372" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(139,92,246,0.3)" stroke-width="1"/>
+                    <text x="155" y="393" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">UserService</text>
+                    <rect x="50" y="416" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(139,92,246,0.3)" stroke-width="1"/>
+                    <text x="155" y="437" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">UserRepository</text>
+                    <rect x="50" y="460" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(139,92,246,0.3)" stroke-width="1"/>
+                    <text x="155" y="481" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">UserEntity</text>
+
+                    <!-- ===== WALLET CONTEXT ===== -->
+                    <rect x="340" y="30" width="260" height="260" rx="14" fill="rgba(0,212,170,0.04)" stroke="rgba(0,212,170,0.25)" stroke-width="1.5"/>
+                    <rect x="340" y="30" width="260" height="36" rx="14" fill="rgba(0,212,170,0.12)"/>
+                    <rect x="340" y="52" width="260" height="14" fill="rgba(0,212,170,0.12)"/>
+                    <text x="470" y="53" font-family="Space Grotesk,sans-serif" fill="#00d4aa" font-size="12" font-weight="600" text-anchor="middle">Wallet Context</text>
+                    <rect x="360" y="82" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(0,212,170,0.3)" stroke-width="1"/>
+                    <text x="470" y="103" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">WalletService</text>
+                    <rect x="360" y="126" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(0,212,170,0.3)" stroke-width="1"/>
+                    <text x="470" y="147" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">WalletRepository</text>
+                    <rect x="360" y="170" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(0,212,170,0.3)" stroke-width="1"/>
+                    <text x="470" y="191" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">WalletEntity</text>
+                    <rect x="360" y="214" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(0,212,170,0.3)" stroke-width="1"/>
+                    <text x="470" y="235" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">CreateDepositService</text>
+                    <rect x="360" y="248" width="220" height="34" rx="6" fill="rgba(0,212,170,0.06)" stroke="rgba(0,212,170,0.3)" stroke-width="1" stroke-dasharray="4,2"/>
+                    <text x="470" y="269" font-family="JetBrains Mono,monospace" fill="#00d4aa" font-size="10" text-anchor="middle" dominant-baseline="central">StripePaymentProvider</text>
+
+                    <!-- ===== TRANSFER CONTEXT ===== -->
+                    <rect x="660" y="30" width="250" height="310" rx="14" fill="rgba(6,182,212,0.04)" stroke="rgba(6,182,212,0.25)" stroke-width="1.5"/>
+                    <rect x="660" y="30" width="250" height="36" rx="14" fill="rgba(6,182,212,0.12)"/>
+                    <rect x="660" y="52" width="250" height="14" fill="rgba(6,182,212,0.12)"/>
+                    <text x="785" y="53" font-family="Space Grotesk,sans-serif" fill="#06b6d4" font-size="12" font-weight="600" text-anchor="middle">Transfer Context</text>
+                    <rect x="680" y="82" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="103" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">CreateTransferService</text>
+                    <rect x="680" y="126" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="147" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">ProcessTransferService</text>
+                    <rect x="680" y="170" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="191" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">TransferWalletConsumer</text>
+                    <rect x="680" y="214" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="235" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">TransferConsumer</text>
+                    <rect x="680" y="258" width="210" height="34" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="279" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">TransferEntity</text>
+                    <rect x="680" y="302" width="210" height="30" rx="6" fill="#151d30" stroke="rgba(6,182,212,0.3)" stroke-width="1"/>
+                    <text x="785" y="321" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="9.5" text-anchor="middle" dominant-baseline="central">TransferStatusConsumer</text>
+
+                    <!-- ===== TRANSACTION CONTEXT ===== -->
+                    <rect x="340" y="340" width="260" height="170" rx="14" fill="rgba(245,158,11,0.04)" stroke="rgba(245,158,11,0.25)" stroke-width="1.5"/>
+                    <rect x="340" y="340" width="260" height="36" rx="14" fill="rgba(245,158,11,0.12)"/>
+                    <rect x="340" y="362" width="260" height="14" fill="rgba(245,158,11,0.12)"/>
+                    <text x="470" y="363" font-family="Space Grotesk,sans-serif" fill="#f59e0b" font-size="12" font-weight="600" text-anchor="middle">Transaction Context</text>
+                    <rect x="360" y="392" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(245,158,11,0.3)" stroke-width="1"/>
+                    <text x="470" y="413" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">CreateTransactionService</text>
+                    <rect x="360" y="436" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(245,158,11,0.3)" stroke-width="1"/>
+                    <text x="470" y="457" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">TransactionRepository</text>
+                    <rect x="360" y="470" width="220" height="34" rx="6" fill="#151d30" stroke="rgba(245,158,11,0.3)" stroke-width="1"/>
+                    <text x="470" y="491" font-family="JetBrains Mono,monospace" fill="#cbd5e1" font-size="10" text-anchor="middle" dominant-baseline="central">TransactionEntity</text>
+
+                    <!-- ===== SHARED: OUTBOX + KAFKA ===== -->
+                    <rect x="340" y="550" width="570" height="50" rx="12" fill="rgba(245,158,11,0.06)" stroke="rgba(245,158,11,0.2)" stroke-width="1.5" stroke-dasharray="6,3"/>
+                    <text x="625" y="573" font-family="Space Grotesk,sans-serif" fill="#f59e0b" font-size="11" font-weight="600" text-anchor="middle" letter-spacing="0.06em">INFRAESTRUTURA COMPARTILHADA</text>
+                    <text x="625" y="590" font-family="JetBrains Mono,monospace" fill="#94a3b8" font-size="9.5" text-anchor="middle">OutboxEntity · OutboxPublisher · Kafka (topics: transfer, wallet, deposit)</text>
+
+                    <!-- ===== CONEXÕES ENTRE CONTEXTOS ===== -->
+                    <!-- Auth → Wallet (referência de userId) -->
+                    <line x1="280" y1="180" x2="340" y2="160" stroke="rgba(239,68,68,0.2)" stroke-width="1.2" stroke-dasharray="4,3"/>
+                    <!-- User → Wallet -->
+                    <line x1="280" y1="410" x2="340" y2="395" stroke="rgba(139,92,246,0.2)" stroke-width="1.2" stroke-dasharray="4,3"/>
+                    <!-- User → Transfer -->
+                    <path d="M280,400 Q 500,520 660,200" fill="none" stroke="rgba(139,92,246,0.15)" stroke-width="1" stroke-dasharray="4,3"/>
+                    <!-- Wallet → Kafka -->
+                    <line x1="470" y1="290" x2="470" y2="548" stroke="rgba(245,158,11,0.2)" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ak)"/>
+                    <!-- Transfer → Kafka -->
+                    <line x1="785" y1="340" x2="700" y2="548" stroke="rgba(245,158,11,0.2)" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ak)"/>
+                    <!-- Transaction → Kafka -->
+                    <line x1="470" y1="510" x2="470" y2="548" stroke="rgba(245,158,11,0.2)" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ak)"/>
+                    <!-- Transfer → Wallet (via Kafka - seta visual) -->
+                    <path d="M660,160 Q 600,160 600,100 Q 600,80 580,80 L 580,100" fill="none" stroke="rgba(6,182,212,0.2)" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#ak)"/>
+                    <!-- Kafka → Transaction -->
+                    <line x1="560" y1="575" x2="560" y2="510" stroke="rgba(245,158,11,0.2)" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ak)"/>
+
+                    <!-- Rótulos de conexão -->
+                    <text x="290" y="155" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8" transform="rotate(-10,290,155)">userId</text>
+                    <text x="290" y="395" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8">userId</text>
+                    <text x="455" y="420" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8" transform="rotate(90,455,420)">outbox</text>
+                    <text x="740" y="440" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8" transform="rotate(-65,740,440)">outbox</text>
+                    <text x="585" y="78" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8">consume</text>
+                    <text x="570" y="540" font-family="Space Grotesk,sans-serif" fill="#64748b" font-size="8">consume</text>
+                </svg>
+            </div>
+        </section>
+    </main>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div class="modal-overlay" id="shortcutsModal">
+        <div class="modal">
+            <h3><i class="fas fa-keyboard"></i> Atalhos de Teclado</h3>
+            <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            <div class="shortcut-list">
+                <div class="shortcut-item">
+                    <span>Navegar para Transferência</span>
+                    <div class="shortcut-keys"><span class="kbd">1</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Navegar para Depósito</span>
+                    <div class="shortcut-keys"><span class="kbd">2</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Navegar para Autenticação</span>
+                    <div class="shortcut-keys"><span class="kbd">3</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Navegar para Arquitetura</span>
+                    <div class="shortcut-keys"><span class="kbd">4</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Alternar Tema</span>
+                    <div class="shortcut-keys"><span class="kbd">T</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Buscar Componente</span>
+                    <div class="shortcut-keys"><span class="kbd">/</span> ou <span class="kbd">Ctrl</span> <span class="kbd">K</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Fechar Modal / Limpar Busca</span>
+                    <div class="shortcut-keys"><span class="kbd">Esc</span></div>
+                </div>
+                <div class="shortcut-item">
+                    <span>Mostrar Atalhos</span>
+                    <div class="shortcut-keys"><span class="kbd">?</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // State management
+        const state = {
+            zoom: { transfer: 1, deposit: 1, auth: 1, arch: 1 },
+            pan: { transfer: { x: 0, y: 0 }, deposit: { x: 0, y: 0 }, auth: { x: 0, y: 0 }, arch: { x: 0, y: 0 } },
+            isDragging: false,
+            dragStart: { x: 0, y: 0 },
+            theme: localStorage.getItem('theme') || 'dark'
+        };
+
+        // Initialize theme
+        document.documentElement.setAttribute('data-theme', state.theme);
+        updateThemeIcon();
+
+        // Tab switching
+        const tabs = document.querySelectorAll('nav.tabs button');
+        const panels = document.querySelectorAll('.panel');
+
+        const colorMap = {
+            transfer: 'active-transfer',
+            deposit: 'active-deposit',
+            auth: 'active-auth',
+            arch: 'active-arch'
+        };
+
+        function switchTab(target) {
+            tabs.forEach(t => {
+                t.className = '';
+                t.setAttribute('aria-selected', 'false');
+            });
+
+            const activeBtn = document.querySelector(`[data-tab="${target}"]`);
+            activeBtn.classList.add(colorMap[target]);
+            activeBtn.setAttribute('aria-selected', 'true');
+
+            panels.forEach(p => {
+                p.classList.remove('active');
+                void p.offsetWidth;
+            });
+            document.getElementById(target).classList.add('active');
+        }
+
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+            btn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    btn.click();
+                }
+            });
+        });
+
+        // Zoom/Pan functionality
+        function updateTransform(diagramId) {
+            const svg = document.querySelector(`#diagram-${diagramId} svg`);
+            if (svg) {
+                svg.style.transform = `translate(${state.pan[diagramId].x}px, ${state.pan[diagramId].y}px) scale(${state.zoom[diagramId]})`;
+            }
+            const zoomLevelEl = document.getElementById(`zoomLevel-${diagramId}`);
+            if (zoomLevelEl) {
+                zoomLevelEl.textContent = `${Math.round(state.zoom[diagramId] * 100)}%`;
+            }
+        }
+
+        function zoomIn(diagramId) {
+            state.zoom[diagramId] = Math.min(state.zoom[diagramId] + 0.2, 3);
+            updateTransform(diagramId);
+        }
+
+        function zoomOut(diagramId) {
+            state.zoom[diagramId] = Math.max(state.zoom[diagramId] - 0.2, 0.5);
+            updateTransform(diagramId);
+        }
+
+        function resetZoom(diagramId) {
+            state.zoom[diagramId] = 1;
+            state.pan[diagramId] = { x: 0, y: 0 };
+            updateTransform(diagramId);
+        }
+
+        function panTo(diagramId, x, y) {
+            const container = document.getElementById(`diagram-${diagramId}`);
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            state.pan[diagramId] = {
+                x: (rect.width / 2) - (x * state.zoom[diagramId]),
+                y: (rect.height / 2) - (y * state.zoom[diagramId])
+            };
+            updateTransform(diagramId);
+        }
+
+        // Mouse drag for panning - DISABLED (using traditional scroll)
+        // document.querySelectorAll('.diagram-wrap').forEach(wrap => {
+        //     wrap.addEventListener('mousedown', (e) => {
+        //         if (e.target.closest('button')) return;
+        //         state.isDragging = true;
+        //         state.dragStart = { x: e.clientX, y: e.clientY };
+        //         wrap.style.cursor = 'grabbing';
+        //     });
+        // });
+
+        // document.addEventListener('mousemove', (e) => {
+        //     if (!state.isDragging) return;
+        //     const activePanel = document.querySelector('.panel.active');
+        //     if (!activePanel) return;
+        //     const diagramId = activePanel.id;
+        //     const dx = e.clientX - state.dragStart.x;
+        //     const dy = e.clientY - state.dragStart.y;
+        //     state.dragStart = { x: e.clientX, y: e.clientY };
+        //     state.pan[diagramId].x += dx;
+        //     state.pan[diagramId].y += dy;
+        //     updateTransform(diagramId);
+        // });
+
+        // document.addEventListener('mouseup', () => {
+        //     state.isDragging = false;
+        //     document.querySelectorAll('.diagram-wrap').forEach(wrap => {
+        //         wrap.style.cursor = 'grab';
+        //     });
+        // });
+
+        // Wheel zoom - only when Ctrl/Cmd is held, otherwise scroll naturally
+        document.querySelectorAll('.diagram-wrap').forEach(wrap => {
+            wrap.addEventListener('wheel', (e) => {
+                // If Ctrl/Cmd is held, zoom; otherwise let natural scroll happen
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const diagramId = wrap.id.replace('diagram-', '');
+                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                    state.zoom[diagramId] = Math.max(0.5, Math.min(3, state.zoom[diagramId] + delta));
+                    updateTransform(diagramId);
+                }
+                // Without Ctrl/Cmd, allow natural scroll behavior
+            });
+        });
+
+        // Theme toggle
+        function toggleTheme() {
+            state.theme = state.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', state.theme);
+            localStorage.setItem('theme', state.theme);
+            updateThemeIcon();
+            showToast(`Tema ${state.theme === 'dark' ? 'escuro' : 'claro'} ativado`, 'info');
+        }
+
+        function updateThemeIcon() {
+            const icon = document.querySelector('#themeToggle i');
+            if (icon) {
+                icon.className = state.theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+        }
+
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+
+        function buildSearchIndex() {
+            const items = [];
+            document.querySelectorAll('.step').forEach((step, index) => {
+                const text = step.textContent.trim();
+                const panel = step.closest('.panel');
+                if (text && panel) {
+                    items.push({
+                        term: text.toLowerCase(),
+                        display: text.split('\n')[0].substring(0, 40),
+                        text: text.substring(0, 50),
+                        panelId: panel.id,
+                        element: step
+                    });
+                }
+            });
+            return items;
+        }
+
+        const searchIndex = buildSearchIndex();
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                if (!query || !searchResults) {
+                    searchResults?.classList.remove('active');
+                    return;
+                }
+
+                const matches = searchIndex.filter(item => item.term.includes(query)).slice(0, 10);
+                
+                searchResults.innerHTML = matches.map(item => `
+                    <div class="search-result-item" data-panel="${item.panelId}">
+                        <div class="label">${getPanelName(item.panelId)}</div>
+                        <div class="name">${item.display}</div>
+                    </div>
+                `).join('');
+
+                searchResults.classList.toggle('active', matches.length > 0);
+
+                searchResults.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const panelId = item.dataset.panel;
+                        switchTab(panelId);
+                        searchInput.value = '';
+                        searchResults.classList.remove('active');
+                        showToast(`Navegado para: ${item.querySelector('.name').textContent}`, 'success');
+                    });
+                });
+            });
+        }
+
+        function getPanelName(id) {
+            const names = { transfer: 'Transferência', deposit: 'Depósito', auth: 'Autenticação', arch: 'Arquitetura' };
+            return names[id] || id;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') {
+                if (e.key === 'Escape') {
+                    searchInput?.blur();
+                    searchResults?.classList.remove('active');
+                }
+                return;
+            }
+
+            switch (e.key) {
+                case '1': switchTab('transfer'); break;
+                case '2': switchTab('deposit'); break;
+                case '3': switchTab('auth'); break;
+                case '4': switchTab('arch'); break;
+                case 't':
+                case 'T': toggleTheme(); break;
+                case '/':
+                case 'k':
+                    if (e.ctrlKey || e.key === '/') {
+                        e.preventDefault();
+                        searchInput?.focus();
+                    }
+                    break;
+                case '?': openModal(); break;
+                case 'Escape': closeModal(); break;
+            }
+        });
+
+        // Modal functions
+        function openModal() {
+            document.getElementById('shortcutsModal')?.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('shortcutsModal')?.classList.remove('active');
+        }
+
+        const keyboardShortcutsBtn = document.getElementById('keyboardShortcuts');
+        if (keyboardShortcutsBtn) keyboardShortcutsBtn.addEventListener('click', openModal);
+        
+        const shortcutsModal = document.getElementById('shortcutsModal');
+        if (shortcutsModal) {
+            shortcutsModal.addEventListener('click', (e) => {
+                if (e.target.id === 'shortcutsModal') closeModal();
+            });
+        }
+
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+            toast.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Export SVG function
+        function exportSVG(diagramId) {
+            const svg = document.querySelector(`#diagram-${diagramId} svg`);
+            if (!svg) return;
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            
+            if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if (!source.match(/^<svg[^>]+xmlns:xlink="http:\/\/www\.w3\.org\/1999\/xlink"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `diagram-${diagramId}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast('SVG exportado com sucesso!', 'success');
+        }
+
+        // Hover effects on steps
+        document.querySelectorAll('.step').forEach(step => {
+            step.addEventListener('mouseenter', () => {
+                step.style.transform = 'translateX(2px)';
+                step.style.transition = 'transform 0.15s ease';
+            });
+            step.addEventListener('mouseleave', () => {
+                step.style.transform = 'translateX(0)';
+            });
+        });
+
+        // Initialize
+        setTimeout(() => showToast('Pressione ? para ver atalhos de teclado', 'info'), 1000);
+    </script>
+</body>
+</html>
+
+

@@ -381,6 +381,44 @@ src/test/java/com/payment/payment_service
         `-- TransferWalletConsumerTest
 ```
 
+## Monitoring configuration
+
+```text
+.
+|-- prometheus.yml                          Prometheus scrape config (30s interval)
+|-- grafana/
+|   |-- provisioning/
+|   |   |-- datasources/
+|   |   |   `-- prometheus.yml              Auto-provisions Prometheus datasource
+|   |   `-- dashboards/
+|   |       `-- dashboards.yml              Dashboard provisioning config
+|   `-- dashboards/
+|       |-- business-metrics.json           Transfers, outbox, users dashboard
+|       |-- application-api.json            HTTP request rate, latency, errors dashboard
+|       `-- infrastructure-jvm.json         JVM, GC, HikariCP, Kafka, Redis dashboard
+```
+
+### Prometheus (`prometheus.yml`)
+
+- **scrape_interval**: 30s
+- **evaluation_interval**: 30s
+- **scrape_timeout**: 10s
+- Single job `payment-service` targeting `payment-service:8080/actuator/prometheus`
+
+### Grafana provisioning
+
+- Datasource `Prometheus` is auto-provisioned from `grafana/provisioning/datasources/prometheus.yml`
+- Dashboards are auto-provisioned from `grafana/provisioning/dashboards/dashboards.yml` pointing to `/var/lib/grafana/dashboards`
+- Dashboard JSON files in `grafana/dashboards/` are mounted as a Docker volume
+- Persistent storage via `grafana_data` Docker volume (survives container restart)
+
+### Docker volumes for monitoring
+
+| Volume | Container path | Service |
+|--------|---------------|---------|
+| `prometheus_data` | `/prometheus` | prometheus |
+| `grafana_data` | `/var/lib/grafana` | grafana |
+
 ## Current structural notes
 
 - The project now uses an outbox table for transfer and wallet event publication. Old Spring event listener classes are no longer part of the design.

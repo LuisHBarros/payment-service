@@ -101,5 +101,5 @@ Nenhum problema crítico em aberto.
 8. Fortalecer regras de senha (complexidade, mínimo de caracteres).
 9. Externalizar valores de retry/backoff do Kafka consumer para `application.yaml`.
 10. Implementar provedores de pagamento adicionais (PayPal, Mercado Pago, etc.).
-11. Customizar dashboards Grafana e intervalo de scrape do Prometheus.
-12. Implementar sistema de notificação de depósitos (email, push, etc.).
+11. Implementar sistema de notificação de depósitos (email, push, etc.).
+12. Adicionar Node Exporter e cAdvisor para métricas de host e containers.

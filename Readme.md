@@ -531,21 +531,42 @@ UUID firstWalletId = sourceWalletId.compareTo(destinationWalletId) <= 0
 
 | Componente | Função |
 |---|---|
-| **Prometheus** | Coleta e armazena métricas da aplicação |
-| **Grafana** | Dashboards em tempo real |
+| **Prometheus** | Coleta e armazena métricas (scrape a cada 30s) |
+| **Grafana** | Dashboards em tempo real (provisioning automático) |
 | **Micrometer** | Abstração de métricas no código Java |
 | **Logback** | Logging estruturado em JSON |
+
+### Configuração do Prometheus
+
+| Parâmetro | Valor |
+|---|---|
+| `scrape_interval` | 30s |
+| `evaluation_interval` | 30s |
+| `scrape_timeout` | 10s |
+| Target | `payment-service:8080/actuator/prometheus` |
+
+### Dashboards Grafana
+
+Os dashboards são provisionados automaticamente via arquivos JSON versionados no repositório. Não é necessário criá-los manualmente.
+
+| Dashboard | Arquivo | Panels |
+|---|---|---|
+| **Business Metrics** | `grafana/dashboards/business-metrics.json` | 10 — Taxa de transfers, falhas por motivo, outbox publicado/falhado, latência outbox (avg/P95), usuários por tipo |
+| **Application & API** | `grafana/dashboards/application-api.json` | 8 — Requisições/s por endpoint, latência P50/P95/P99, erros 4xx/5xx, distribuição de status codes |
+| **Infrastructure & JVM** | `grafana/dashboards/infrastructure-jvm.json` | 12 — Heap/non-heap, GC pause, HikariCP pool (active/idle/max, utilização %), Kafka producer, Redis Lettuce, CPU |
 
 ### Métricas Disponíveis
 
 | Categoria | Métricas |
 |---|---|
-| **Transferências** | Contagem, taxa de sucesso/falha, tempo de execução |
-| **Depósitos** | Contagem por provedor, tempo de processamento |
-| **Carteiras** | Saldos, movimentações por carteira |
-| **Kafka** | Mensagens produzidas/consumidas, latência |
-| **HTTP** | Requisições por endpoint, tempo de resposta, status codes |
-| **JVM** | Heap, GC, threads |
+| **Transferências** | Criação, conclusão, falhas por motivo, volume total transferido |
+| **Outbox** | Eventos publicados/falhados por tipo, latência média e P95 |
+| **Usuários** | Criação por tipo (COMMON/MERCHANT) |
+| **HTTP** | Requisições/s por endpoint e status code, latência P50/P95/P99, erros 4xx/5xx |
+| **JVM** | Heap e non-heap, GC pause time/count, CPU usage |
+| **Conexões** | HikariCP active/idle/max, utilização do pool |
+| **Kafka** | Producer send rate, producer error rate |
+| **Redis** | Lettuce command completion rate |
 
 ### Endpoints de Saúde
 
@@ -555,7 +576,17 @@ curl http://localhost:8080/actuator/health
 
 # Todas as métricas disponíveis
 curl http://localhost:8080/actuator/metrics
+
+# Métricas brutas no formato Prometheus
+curl http://localhost:8080/actuator/prometheus
 ```
+
+### Persistência de Dados
+
+| Serviço | Volume Docker | Persiste |
+|---|---|---|
+| **Prometheus** | `prometheus_data` → `/prometheus` | Métricas históricas |
+| **Grafana** | `grafana_data` → `/var/lib/grafana` | Dashboards, plugins, configurações de usuário |
 
 ---
 

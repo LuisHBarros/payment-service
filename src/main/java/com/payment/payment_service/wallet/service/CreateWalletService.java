@@ -14,17 +14,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 
 
+import lombok.RequiredArgsConstructor;
+
 @Service
 @Slf4j
-
+@RequiredArgsConstructor
 public class CreateWalletService {
 
     private final WalletRepository walletRepository;
-
-    public CreateWalletService(WalletRepository walletRepository) {
-        this.walletRepository = walletRepository;
-    }
-    
 
     @Transactional
     public void execute(UUID userId) {

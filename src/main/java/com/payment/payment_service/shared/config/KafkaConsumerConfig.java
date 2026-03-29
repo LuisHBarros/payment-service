@@ -24,6 +24,12 @@ public class KafkaConsumerConfig {
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
 
+    @Value("${spring.kafka.consumer.listener.retry-backoff-ms:1000}")
+    private long retryBackoffMs;
+
+    @Value("${spring.kafka.consumer.listener.max-attempts:3}")
+    private long maxAttempts;
+
     @Bean
     public ConsumerFactory<String, Object> consumerFactory() {
         JsonDeserializer<Object> deserializer = new JsonDeserializer<>();
@@ -47,7 +53,7 @@ public class KafkaConsumerConfig {
 
         // 3 tentativas com intervalo de 1s antes de enviar pro DLT
         var recoverer = new DeadLetterPublishingRecoverer(Objects.requireNonNull(kafkaTemplate));
-        var errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3));
+        var errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(retryBackoffMs, maxAttempts));
         factory.setCommonErrorHandler(errorHandler);
 
         return factory;

@@ -8,16 +8,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.payment.payment_service.user.entity.UserEntity;
-import com.payment.payment_service.user.exceptions.UserNotFoundException;
+import com.payment.payment_service.user.exception.UserNotFoundException;
 import com.payment.payment_service.user.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class GetUserService {
 
     private final UserRepository userRepository;
-
-    public GetUserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     public UserEntity findById(UUID id) {
         return userRepository.findById(Objects.requireNonNull(id))

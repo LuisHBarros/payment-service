@@ -15,10 +15,10 @@ import com.payment.payment_service.transaction.exception.TransactionNotFoundExce
 import com.payment.payment_service.transfer.exception.TransferException;
 import com.payment.payment_service.transfer.exception.TransferNotFoundException;
 import com.payment.payment_service.transfer.exception.UnauthorizedTransferException;
-import com.payment.payment_service.user.exceptions.UserDocumentException;
-import com.payment.payment_service.user.exceptions.UserEmailException;
-import com.payment.payment_service.user.exceptions.UserNotFoundException;
-import com.payment.payment_service.user.exceptions.UserPasswordException;
+import com.payment.payment_service.user.exception.UserDocumentException;
+import com.payment.payment_service.user.exception.UserEmailException;
+import com.payment.payment_service.user.exception.UserNotFoundException;
+import com.payment.payment_service.user.exception.UserPasswordException;
 import com.payment.payment_service.wallet.exception.InsufficientBalanceException;
 import com.payment.payment_service.wallet.exception.InvalidPaymentProviderException;
 import com.payment.payment_service.wallet.exception.PaymentProviderException;

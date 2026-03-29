@@ -18,7 +18,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import com.payment.payment_service.user.entity.UserEntity;
-import com.payment.payment_service.user.exceptions.UserNotFoundException;
+import com.payment.payment_service.user.exception.UserNotFoundException;
 import com.payment.payment_service.user.repository.UserRepository;
 import com.payment.payment_service.user.type.UserType;
 import com.payment.payment_service.user.value_object.Document;

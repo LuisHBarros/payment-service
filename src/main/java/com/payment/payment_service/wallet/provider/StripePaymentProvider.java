@@ -21,6 +21,8 @@ import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
 
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,6 +36,8 @@ public class StripePaymentProvider implements PaymentProvider {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Retry(name = "paymentProvider", fallbackMethod = "createDepositFallback")
+    @CircuitBreaker(name = "paymentProvider", fallbackMethod = "createDepositFallback")
     public PaymentProviderResponse createDeposit(BigDecimal amount, UUID userId, UUID walletId) {
         var params = new PaymentIntentCreateParams.Builder()
             .setAmount(amount.movePointRight(2).longValueExact())
@@ -85,6 +89,12 @@ public class StripePaymentProvider implements PaymentProvider {
             log.error("Serialization error for PaymentIntent userId={} walletId={}", userId, walletId, e);
             throw new PaymentProviderException("Error serializing payment response", e);
         }
+    }
+
+    private PaymentProviderResponse createDepositFallback(
+            BigDecimal amount, UUID userId, UUID walletId, Exception e) {
+        log.error("Payment provider unavailable after retries/circuit breaker open. userId={} walletId={}", userId, walletId, e);
+        throw new PaymentProviderException("Payment provider temporarily unavailable. Please try again later.", e);
     }
 
     @Override

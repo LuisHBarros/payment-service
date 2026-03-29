@@ -59,10 +59,10 @@ Nenhum problema crítico em aberto.
 | 7 | Regras de senha fracas | ABERTO | `Password` só exige não vazio + mínimo de 5 caracteres, sem complexidade |
 | 8 | `AesEncryptor` usa AES-CBC | ABERTO | Considerar AES-GCM para criptografia autenticada |
 | 9 | `AesEncryptor` usa charset padrão da plataforma | ABERTO | 3 chamadas `getBytes()`/`new String()` sem `StandardCharsets.UTF_8` |
-| 10 | Estilos de injeção de dependência mistos | ABERTO | Módulo `user` + 2 serviços de wallet usam construtor explícito; resto usa `@RequiredArgsConstructor` |
-| 11 | Nomenclatura inconsistente de pacotes de exceção | ABERTO | `user.exceptions` (plural) vs `transfer.exception`/`wallet.exception`/`transaction.exception` (singular) |
-| 12 | `TransferAuthorizationServiceTest` precisa de limpeza | ABERTO | Nomes OK, mas formatação/indentação inconsistentes |
-| 13 | Valores de retry/backoff ainda parcialmente hardcodados | ABERTO | `FixedBackOff(1000L, 3)` em `KafkaConsumerConfig.java:50` |
+| 10 | Estilos de injeção de dependência mistos | **RESOLVIDO** | 8 serviços migrados para `@RequiredArgsConstructor`: `CreateUserService`, `DeleteUserService`, `GetUserService`, `UpdatePasswordService`, `PatchUserService`, `UpdateUserEmailService`, `CreateWalletService`, `GetWalletService` |
+| 11 | Nomenclatura inconsistente de pacotes de exceção | **RESOLVIDO** | `user.exceptions` renomeado para `user.exception` (singular), alinhando com `wallet.exception`, `transfer.exception`, `transaction.exception` |
+| 12 | `TransferAuthorizationServiceTest` precisa de limpeza | **RESOLVIDO** | Indentação padronizada em 4 spaces, blank lines uniformes, formatação consistente |
+| 13 | Valores de retry/backoff ainda parcialmente hardcodados | **RESOLVIDO** | `FixedBackOff(1000L, 3)` externalizado para `application.yaml` com env vars `KAFKA_RETRY_BACKOFF_MS` e `KAFKA_MAX_ATTEMPTS` |
 | 14 | Provedores de pagamento adicionais necessários | ABERTO | Somente Stripe implementado; considerar PayPal, Mercado Pago, etc. |
 | 15 | Dashboards Grafana precisam de customização | **RESOLVIDO** | 3 dashboards versionados: business-metrics, application-api, infrastructure-jvm; provisioning config em `grafana/provisioning/dashboards/` |
 | 16 | Intervalo de scrape do Prometheus | **RESOLVIDO** | `prometheus.yml` com `scrape_interval: 30s`, `scrape_timeout: 10s`, `evaluation_interval: 30s` |
@@ -96,10 +96,10 @@ Nenhum problema crítico em aberto.
 3. Implementar retry/circuit breaker para chamadas ao payment provider (`@Retryable` já habilitado mas não utilizado).
 4. Melhorar tratamento de erros e estratégias de recuperação do payment provider.
 5. Refatorar `AesEncryptor` para AES-GCM com `StandardCharsets.UTF_8`.
-6. Padronizar nomenclatura de pacotes de exceção (`user.exceptions` → `user.exception`).
-7. Padronizar estilo de injeção de dependência (escolher entre construtor explícito ou `@RequiredArgsConstructor`).
+6. ~~Padronizar nomenclatura de pacotes de exceção (`user.exceptions` → `user.exception`).~~
+7. ~~Padronizar estilo de injeção de dependência (escolher entre construtor explícito ou `@RequiredArgsConstructor`).~~
 8. Fortalecer regras de senha (complexidade, mínimo de caracteres).
-9. Externalizar valores de retry/backoff do Kafka consumer para `application.yaml`.
+9. ~~Externalizar valores de retry/backoff do Kafka consumer para `application.yaml`.~~
 10. Implementar provedores de pagamento adicionais (PayPal, Mercado Pago, etc.).
 11. Implementar sistema de notificação de depósitos (email, push, etc.).
 12. Adicionar Node Exporter e cAdvisor para métricas de host e containers.

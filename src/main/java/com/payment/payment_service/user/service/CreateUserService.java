@@ -3,8 +3,8 @@ package com.payment.payment_service.user.service;
 import java.util.UUID;
 
 import com.payment.payment_service.user.entity.UserEntity;
-import com.payment.payment_service.user.exceptions.UserDocumentException;
-import com.payment.payment_service.user.exceptions.UserEmailException;
+import com.payment.payment_service.user.exception.UserDocumentException;
+import com.payment.payment_service.user.exception.UserEmailException;
 import com.payment.payment_service.user.repository.UserRepository;
 import com.payment.payment_service.user.type.UserType;
 import com.payment.payment_service.user.value_object.Email;
@@ -18,20 +18,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class CreateUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final KafkaEventProducer kafkaEventProducer;
     private final PaymentMetrics metrics;
-
-    public CreateUserService(UserRepository userRepository, PasswordEncoder passwordEncoder, KafkaEventProducer kafkaEventProducer, PaymentMetrics metrics) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.kafkaEventProducer = kafkaEventProducer;
-        this.metrics = metrics;
-    }
 
     @Transactional
     public UUID execute(String name, String email, String password, String document) {

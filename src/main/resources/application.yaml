@@ -21,6 +21,9 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.payment.payment_service.shared.event, com.payment.payment_service.transfer.event
+      listener:
+        retry-backoff-ms: ${KAFKA_RETRY_BACKOFF_MS:1000}
+        max-attempts: ${KAFKA_MAX_ATTEMPTS:3}
 
 kafka:
   topics:
@@ -106,3 +109,34 @@ rate-limit:
       capacity: 1000
       refill-tokens: 1000
       period-milliseconds: 60000
+
+resilience4j:
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - com.payment.payment_service.wallet.exception.PaymentProviderException
+        ignoreExceptions:
+          - com.payment.payment_service.wallet.exception.WebhookSignatureException
+          - com.payment.payment_service.wallet.exception.InvalidPaymentProviderException
+    instances:
+      paymentProvider:
+        baseConfig: default
+  circuitbreaker:
+    configs:
+      default:
+        failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 3s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        minimumNumberOfCalls: 5
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+    instances:
+      paymentProvider:
+        baseConfig: default

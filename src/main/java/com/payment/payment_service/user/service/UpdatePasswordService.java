@@ -5,25 +5,22 @@ import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.payment.payment_service.user.entity.UserEntity;
-import com.payment.payment_service.user.exceptions.UserNotFoundException;
-import com.payment.payment_service.user.exceptions.UserPasswordException;
+import com.payment.payment_service.user.exception.UserNotFoundException;
+import com.payment.payment_service.user.exception.UserPasswordException;
 import com.payment.payment_service.user.repository.UserRepository;
 import com.payment.payment_service.user.value_object.Password;
 
-import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class UpdatePasswordService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-
-    public UpdatePasswordService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @Transactional
     public UserEntity execute(UUID id, String password) {

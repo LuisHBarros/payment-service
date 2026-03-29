@@ -8,18 +8,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.payment.payment_service.user.value_object.Email;
 import com.payment.payment_service.user.entity.UserEntity;
-import com.payment.payment_service.user.exceptions.UserEmailException;
-import com.payment.payment_service.user.exceptions.UserNotFoundException;
+import com.payment.payment_service.user.exception.UserEmailException;
+import com.payment.payment_service.user.exception.UserNotFoundException;
 import com.payment.payment_service.user.repository.UserRepository;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class UpdateUserEmailService {
 
     private final UserRepository userRepository;
-
-    public UpdateUserEmailService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     @Transactional
     public UserEntity execute(UUID id, String email) {

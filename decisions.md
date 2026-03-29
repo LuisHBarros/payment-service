@@ -161,7 +161,47 @@ public void recover(Exception e, TransferCreatedEvent event) {
 
 ---
 
-### 6. Arquitetura Híbrida: Spring Events + Kafka
+### 6. Resilience4j para Payment Provider
+
+**Status:** ✅ Implementado (2026)
+
+**Contexto:**
+`@EnableRetry` estava declarado na aplicação sem nenhum `@Retryable` em uso. Chamadas ao Stripe falhavam imediatamente sem retry, sem circuit breaker e sem fallback. Além disso, `spring-retry` estava no classpath sem `spring-boot-starter-aop`, tornando anotações inefetivas.
+
+**Decisão:**
+Migrar de `spring-retry` para Resilience4j como framework unificado de resiliência para o payment provider.
+
+**Implementação:**
+```java
+// StripePaymentProvider.java
+@Override
+@Retry(name = "paymentProvider", fallbackMethod = "createDepositFallback")
+@CircuitBreaker(name = "paymentProvider", fallbackMethod = "createDepositFallback")
+public PaymentProviderResponse createDeposit(BigDecimal amount, UUID userId, UUID walletId) {
+    // ...
+}
+
+private PaymentProviderResponse createDepositFallback(
+        BigDecimal amount, UUID userId, UUID walletId, Exception e) {
+    throw new PaymentProviderException("Payment provider temporarily unavailable.", e);
+}
+```
+
+**Configuração (application.yaml):**
+- Retry: 3 tentativas, backoff exponencial 500ms (x2), retry apenas em `PaymentProviderException`
+- Circuit Breaker: abre com 50% falha em janela de 10 chamadas, slow call threshold 3s, wait 30s em open state
+- Exceções de negócio (`WebhookSignatureException`, `InvalidPaymentProviderException`) são ignoradas pelo retry
+
+**Benefícios:**
+- Retry com backoff exponencial para falhas transitórias do Stripe
+- Circuit breaker impede cascata de chamadas quando Stripe está indisponível
+- Fallback method com mensagem clara ao cliente (HTTP 502)
+- Métricas integradas com actuator/health via Resilience4j
+- Eliminação de `spring-retry` órfão (sem AOP nunca funcionaria)
+
+---
+
+### 7. Arquitetura Híbrida: Spring Events + Kafka
 
 **Status:** ✅ Implementado (2026)
 

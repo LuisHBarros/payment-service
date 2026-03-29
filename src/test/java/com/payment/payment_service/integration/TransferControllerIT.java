@@ -12,6 +12,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.ParameterizedTypeReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.payment.payment_service.transfer.dto.CreateTransferRequestDTO;
@@ -176,5 +177,118 @@ class TransferControllerIT extends AbstractIntegrationTest {
         JsonNode body = Objects.requireNonNull(response.getBody());
         assertThat(body.get("content")).isNotNull();
         assertThat(body.get("totalElements").asInt()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("GET /transfers?walletId=&status=COMPLETED should filter by status")
+    void findByWalletId_withStatusFilter_shouldFilterByStatus() {
+        UUID senderId = testHelper.createCommonUser("FilterStatusSender", "filter.status.sender@example.com", "Pass123!");
+        UUID receiverId = testHelper.createCommonUser("FilterStatusReceiver", "filter.status.recv@example.com", "Pass123!");
+        UUID sourceWalletId = testHelper.createWallet(senderId, new BigDecimal("100.00"));
+        UUID destWalletId = testHelper.createWallet(receiverId, new BigDecimal("50.00"));
+
+        HttpHeaders headers = testHelper.authHeaders(senderId, "filter.status.sender@example.com", UserType.COMMON);
+        HttpEntity<Void> entity = new HttpEntity<>(Objects.requireNonNull(headers));
+
+        ResponseEntity<JsonNode> response = restTemplate.exchange(
+            "/api/v1/transfers?walletId={id}&status=COMPLETED",
+            org.springframework.http.HttpMethod.GET, entity, JsonNode.class, sourceWalletId
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = Objects.requireNonNull(response.getBody());
+        assertThat(body.get("content")).isNotNull();
+        for (JsonNode item : body.get("content")) {
+            assertThat(item.get("status").asText()).isEqualTo("COMPLETED");
+        }
+    }
+
+    @Test
+    @DisplayName("GET /transfers?walletId=&type=DEBIT should filter as sender only")
+    void findByWalletId_withDebitTypeFilter_shouldFilterAsSender() {
+        UUID senderId = testHelper.createCommonUser("DebitSender", "debit.sender@example.com", "Pass123!");
+        UUID receiverId = testHelper.createCommonUser("DebitReceiver", "debit.receiver@example.com", "Pass123!");
+        UUID sourceWalletId = testHelper.createWallet(senderId, new BigDecimal("100.00"));
+        UUID destWalletId = testHelper.createWallet(receiverId, new BigDecimal("50.00"));
+
+        HttpHeaders headers = testHelper.authHeaders(senderId, "debit.sender@example.com", UserType.COMMON);
+        HttpEntity<Void> entity = new HttpEntity<>(Objects.requireNonNull(headers));
+
+        ResponseEntity<JsonNode> response = restTemplate.exchange(
+            "/api/v1/transfers?walletId={id}&type=DEBIT",
+            org.springframework.http.HttpMethod.GET, entity, JsonNode.class, sourceWalletId
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = Objects.requireNonNull(response.getBody());
+        assertThat(body.get("content")).isNotNull();
+        for (JsonNode item : body.get("content")) {
+            assertThat(item.get("type").asText()).isEqualTo("DEBIT");
+        }
+    }
+
+    @Test
+    @DisplayName("GET /transfers?walletId=&type=CREDIT should filter as receiver only")
+    void findByWalletId_withCreditTypeFilter_shouldFilterAsReceiver() {
+        UUID senderId = testHelper.createCommonUser("CreditSender", "credit.sender@example.com", "Pass123!");
+        UUID receiverId = testHelper.createCommonUser("CreditReceiver", "credit.receiver@example.com", "Pass123!");
+        UUID sourceWalletId = testHelper.createWallet(senderId, new BigDecimal("100.00"));
+        UUID destWalletId = testHelper.createWallet(receiverId, new BigDecimal("50.00"));
+
+        HttpHeaders headers = testHelper.authHeaders(receiverId, "credit.receiver@example.com", UserType.COMMON);
+        HttpEntity<Void> entity = new HttpEntity<>(Objects.requireNonNull(headers));
+
+        ResponseEntity<JsonNode> response = restTemplate.exchange(
+            "/api/v1/transfers?walletId={id}&type=CREDIT",
+            org.springframework.http.HttpMethod.GET, entity, JsonNode.class, destWalletId
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = Objects.requireNonNull(response.getBody());
+        assertThat(body.get("content")).isNotNull();
+        for (JsonNode item : body.get("content")) {
+            assertThat(item.get("type").asText()).isEqualTo("CREDIT");
+        }
+    }
+
+    @Test
+    @DisplayName("GET /transfers?walletId=&startDate=&endDate= should filter by date range")
+    void findByWalletId_withDateRangeFilter_shouldFilterByDateRange() {
+        UUID userId = testHelper.createCommonUser("DateRangeUser", "daterange.user@example.com", "Pass123!");
+        UUID walletId = testHelper.createWallet(userId, new BigDecimal("100.00"));
+
+        HttpHeaders headers = testHelper.authHeaders(userId, "daterange.user@example.com", UserType.COMMON);
+        HttpEntity<Void> entity = new HttpEntity<>(Objects.requireNonNull(headers));
+
+        ResponseEntity<JsonNode> response = restTemplate.exchange(
+            "/api/v1/transfers?walletId={id}&startDate=2020-01-01&endDate=2099-12-31",
+            org.springframework.http.HttpMethod.GET, entity, JsonNode.class, walletId
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = Objects.requireNonNull(response.getBody());
+        assertThat(body.get("content")).isNotNull();
+        assertThat(body.get("totalElements").asInt()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("GET /transfers?walletId= without filters should include type field in response")
+    void findByWalletId_withoutFilters_shouldIncludeTypeField() {
+        UUID senderId = testHelper.createCommonUser("TypeFieldSender", "typefield.sender@example.com", "Pass123!");
+        UUID receiverId = testHelper.createCommonUser("TypeFieldReceiver", "typefield.recv@example.com", "Pass123!");
+        UUID sourceWalletId = testHelper.createWallet(senderId, new BigDecimal("100.00"));
+        UUID destWalletId = testHelper.createWallet(receiverId, new BigDecimal("50.00"));
+
+        HttpHeaders headers = testHelper.authHeaders(senderId, "typefield.sender@example.com", UserType.COMMON);
+        HttpEntity<Void> entity = new HttpEntity<>(Objects.requireNonNull(headers));
+
+        ResponseEntity<JsonNode> response = restTemplate.exchange(
+            "/api/v1/transfers?walletId={id}",
+            org.springframework.http.HttpMethod.GET, entity, JsonNode.class, sourceWalletId
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode body = Objects.requireNonNull(response.getBody());
+        assertThat(body.get("content")).isNotNull();
     }
 }

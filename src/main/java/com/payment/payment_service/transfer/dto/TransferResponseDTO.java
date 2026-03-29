@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.payment.payment_service.shared.type.TransferStatus;
+import com.payment.payment_service.shared.type.TransferType;
 
 public record TransferResponseDTO(
     UUID id,
@@ -13,5 +14,6 @@ public record TransferResponseDTO(
     BigDecimal amount,
     TransferStatus status,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    TransferType type
 ) {}

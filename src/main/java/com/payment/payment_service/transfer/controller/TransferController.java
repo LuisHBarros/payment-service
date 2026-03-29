@@ -19,7 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.payment.payment_service.config.AuthenticatedUser;
 import com.payment.payment_service.config.SecurityUtils;
 import com.payment.payment_service.shared.query.WalletQueryService;
+import com.payment.payment_service.shared.type.TransferType;
 import com.payment.payment_service.transfer.dto.CreateTransferRequestDTO;
+import com.payment.payment_service.transfer.dto.TransferFilterDTO;
 import com.payment.payment_service.transfer.dto.TransferResponseDTO;
 import com.payment.payment_service.transfer.entity.TransferEntity;
 import com.payment.payment_service.transfer.service.CreateTransferService;
@@ -55,16 +57,25 @@ public class TransferController {
     public ResponseEntity<Page<TransferResponseDTO>> findByWalletId(
         @RequestParam UUID walletId,
         @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
-        @AuthenticationPrincipal AuthenticatedUser auth) {
+        @AuthenticationPrincipal AuthenticatedUser auth,
+        TransferFilterDTO filter) {
         SecurityUtils.requireOwnership(auth, walletQueryService.getSummary(Objects.requireNonNull(walletId)).userId());
         Page<TransferResponseDTO> response = getTransferService
-            .findByWalletId(walletId, pageable)
-            .map(this::toResponseDTO);
+            .findByWalletId(walletId, pageable, filter)
+            .map(transfer -> toResponseDTO(transfer, walletId));
         return ResponseEntity.ok(response);
     }
 
 
     private TransferResponseDTO toResponseDTO(TransferEntity transfer) {
+        return toResponseDTO(transfer, null);
+    }
+
+    private TransferResponseDTO toResponseDTO(TransferEntity transfer, UUID walletId) {
+        TransferType type = null;
+        if (walletId != null) {
+            type = walletId.equals(transfer.getSourceWalletId()) ? TransferType.DEBIT : TransferType.CREDIT;
+        }
         return new TransferResponseDTO(
             transfer.getId(),
             transfer.getSourceWalletId(),
@@ -72,11 +83,10 @@ public class TransferController {
             transfer.getAmount(),
             transfer.getStatus(),
             transfer.getCreatedAt(),
-            transfer.getUpdatedAt()
+            transfer.getUpdatedAt(),
+            type
         );
     }
 
 
 }
-
-

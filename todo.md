@@ -1,6 +1,6 @@
 # Project TODO - Payment Service
 
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 
 ## Recently Completed
 
@@ -26,6 +26,7 @@ Last updated: 2026-03-28
 - Added custom metrics for transfers, deposits, and wallet operations.
 - Implemented JSON structured logging with Logback.
 - Added database seeding and load testing scripts.
+- Implemented transaction ledger query endpoints (`GET /api/v1/transactions`) with pagination, filters (walletId, transferId, type, date range), and ownership checks.
 
 ---
 

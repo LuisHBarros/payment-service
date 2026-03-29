@@ -1,6 +1,6 @@
 # Payment Service - Project Structure
 
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 
 ## Package layout
 
@@ -58,7 +58,8 @@ com.payment.payment_service
 |   |-- repository
 |   |   `-- OutboxRepository
 |   `-- type
-|       `-- TransferStatus
+|       |-- TransferStatus
+|       `-- TransferType
 |
 |-- user
 |   |-- controller
@@ -143,6 +144,7 @@ com.payment.payment_service
 |   |   `-- TransferController
 |   |-- dto
 |   |   |-- CreateTransferRequestDTO
+|   |   |-- TransferFilterDTO
 |   |   `-- TransferResponseDTO
 |   |-- entity
 |   |   `-- TransferEntity
@@ -153,23 +155,32 @@ com.payment.payment_service
 |   |   |-- TransferNotFoundException
 |   |   `-- UnauthorizedTransferException
 |   |-- repository
-|   |   `-- TransferRepository
-|   `-- service
-|       |-- CreateTransferService
-|       |-- GetTransferService
-|       |-- TransferAuthorizationService
-|       `-- TransferStatusUpdateService
+|   |   `-- TransferRepository (JpaSpecificationExecutor)
+|   |-- service
+|   |   |-- CreateTransferService
+|   |   |-- GetTransferService
+|   |   |-- TransferAuthorizationService
+|   |   `-- TransferStatusUpdateService
+|   `-- specification
+|       `-- TransferSpecification
 |
 |-- transaction
 |   |-- consumer
 |   |   |-- DepositConsumer
 |   |   `-- TransferConsumer
+|   |-- controller
+|   |   `-- TransactionController
+|   |-- dto
+|   |   `-- TransactionResponseDTO
 |   |-- entity
 |   |   `-- TransactionEntity
+|   |-- exception
+|   |   `-- TransactionNotFoundException
 |   |-- repository
 |   |   `-- TransactionRepository
 |   |-- service
-|   |   `-- CreateTransactionService
+|   |   |-- CreateTransactionService
+|   |   `-- GetTransactionService
 |   `-- type
 |       `-- TransactionType
 |
@@ -222,12 +233,17 @@ com.payment.payment_service
 - Owns transfer creation and transfer status tracking.
 - Validates sender, receiver, ownership, and balance preconditions before creating a transfer.
 - Persists transfer creation as `PENDING` and records `TRANSFER_CREATED` in the outbox.
+- Supports listing transfers by wallet with optional combinable filters: `status`, `type` (virtual DEBIT/CREDIT), `startDate`, `endDate`.
+- Uses JPA Specification (`TransferSpecification`) to build dynamic queries with the filter combination.
+- The `type` filter is virtual: `DEBIT` matches `source_wallet_id = walletId`, `CREDIT` matches `destination_wallet_id = walletId`.
+- Response DTO includes a computed `type` field based on the requesting wallet's perspective.
 
 ### `transaction`
 
 - Maintains the ledger of debit and credit entries.
 - Reacts to wallet events and publishes the final transfer status event.
 - Processes deposit completion events and persists credit ledger entries.
+- Exposes query endpoints for transaction history with pagination and optional filters (walletId, transferId, type, date range).
 
 ## Public HTTP API
 
@@ -242,11 +258,14 @@ com.payment.payment_service
 | `DELETE` | `/api/v1/users/{id}` | Owner or `ADMIN` | Soft/active logic is not used here; service deletes record |
 | `GET` | `/api/v1/wallets/{userId}` | Owner or `ADMIN` | Returns the wallet for a user |
 | `POST` | `/api/v1/transfers` | `COMMON` or `ADMIN` | Source wallet must belong to caller |
-| `GET` | `/api/v1/transfers?walletId=...` | Owner or `ADMIN` | Paginated, sorted by `createdAt DESC` |
+| `GET` | `/api/v1/transfers?walletId=...` | Owner or `ADMIN` | Paginated, sorted by `createdAt DESC`. Optional filters: `status`, `type` (DEBIT/CREDIT), `startDate`, `endDate` |
 | `POST` | `/api/v1/deposits` | Authenticated | Creates deposit and returns checkout URL |
 | `POST` | `/api/v1/deposits/webhook` | Public | Receives payment provider webhooks |
 | `GET` | `/api/v1/deposits/{id}` | Owner or `ADMIN` | Returns deposit details |
 | `GET` | `/api/v1/deposits?walletId=...` | Owner or `ADMIN` | Paginated deposit list |
+| `GET` | `/api/v1/transactions?walletId=...` | Owner or `ADMIN` | Paginated, optional `type`, `startDate`, `endDate` filters |
+| `GET` | `/api/v1/transactions?transferId=...` | Authenticated | All transactions for a given transfer |
+| `GET` | `/api/v1/transactions/{id}` | Owner or `ADMIN` | Single transaction detail |
 | `GET` | `/actuator/health` | Public | Health endpoint |
 
 ## Kafka topology
@@ -352,3 +371,5 @@ src/test/java/com/payment/payment_service
 - Topic design is split by event type instead of multiplexing several event classes on the same topic.
 - `user` exceptions use `exceptions`, while `transfer` and `wallet` use `exception`. The structure is intentionally documented as-is, not normalized.
 - `UserType` includes `ADMIN`, but there is no public endpoint in this service that creates admin users.
+- `TransferRepository` extends `JpaSpecificationExecutor` to support dynamic filter queries. The legacy `findBySourceWalletIdOrDestinationWalletId` query method is retained but no longer used by the listing endpoint.
+- Composite indexes `(source_wallet_id, created_at DESC)` and `(destination_wallet_id, created_at DESC)` were added in `V3` migration for efficient filtered pagination.

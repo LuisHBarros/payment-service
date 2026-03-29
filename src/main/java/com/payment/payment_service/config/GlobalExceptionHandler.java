@@ -11,6 +11,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.payment.payment_service.transaction.exception.TransactionNotFoundException;
 import com.payment.payment_service.transfer.exception.TransferException;
 import com.payment.payment_service.transfer.exception.TransferNotFoundException;
 import com.payment.payment_service.transfer.exception.UnauthorizedTransferException;
@@ -40,6 +41,10 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(TransferNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(TransferNotFoundException e) {
+        return build(HttpStatus.NOT_FOUND, e);
+    }
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(TransactionNotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
     @ExceptionHandler(UserEmailException.class)

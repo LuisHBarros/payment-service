@@ -242,43 +242,57 @@ Configurar DLT para cada tópico Kafka, permitindo que mensagens com falha sejam
 
 ---
 
-## ⏳ Decisões Pendentes
+### 9. Idempotência em Transações
 
-### 1. Idempotência em Transações
-
-**Status:** ⏸️ Pendente
+**Status:** ✅ Implementado (2026)
 
 **Contexto:**
-O `TransactionConsumer` cria `TransactionEntity` baseado em eventos de wallet, mas não verifica se a transação já existe.
+O `TransactionConsumer` cria `TransactionEntity` baseado em eventos de wallet, mas não verificava se a transação já existia, podendo causar duplicação em caso de reprocessamento de mensagens.
 
-**Decisão pendente:**
-Implementar verificação de unicidade antes de criar transação para garantir idempotência.
+**Decisão:**
+Implementar verificação de unicidade antes de criar transação para garantir idempotência no ledger de transações.
 
-**Mudança necessária:**
-
+**Implementação:**
 ```java
 // CreateTransactionService.java
-@Transactional
-public void executeDebit(UUID walletId, UUID transferId, BigDecimal amount) {
-    // Adicionar verificação de idempotência
-    if (transactionRepository.existsByWalletIdAndTransferIdAndType(
-            walletId, transferId, TransactionType.DEBIT)) {
-        log.info("Transaction DEBIT already exists for walletId={} transferId={}",
-                 walletId, transferId);
+private void save(UUID walletID, UUID transferID, TransactionType type, BigDecimal amount) {
+    // Idempotência: verificar se transação já existe
+    boolean transactionExists = transactionRepository
+        .existsByWalletIdAndTransferIdAndType(walletID, transferID, type);
+
+    if (transactionExists) {
+        log.info("Transaction already exists for walletId={}, transferId={}, type={}, skipping creation",
+                 walletID, transferID, type);
         return;
     }
-    // ... cria transação
+
+    TransactionEntity transaction = new TransactionEntity();
+    transaction.setWalletId(walletID);
+    transaction.setTransferId(transferID);
+    transaction.setType(type);
+    transaction.setAmount(amount);
+    transactionRepository.save(transaction);
+    log.info("Created transaction for walletId={}, transferId={}, type={}",
+             walletID, transferID, type);
 }
 ```
 
-**Considerações:**
-- Necessário adicionar índice único em `(walletId, transferId, type)` no banco
-- Garante que reprocessamento de eventos não crie transações duplicadas
-- Consistente com idempotência implementada em outros contextos
+```java
+// TransactionRepository.java
+boolean existsByWalletIdAndTransferIdAndType(UUID walletId, UUID transferId, TransactionType type);
+```
+
+**Benefícios:**
+- Prevenção de transações duplicadas no ledger
+- Segurança contra reprocessamento de mensagens Kafka
+- Consistência imutável do histórico financeiro
+- Alinhado com idempotência implementada em outros contextos
 
 ---
 
-### 2. Filtros Adicionais em `GET /transfers`
+## ⏳ Decisões Pendentes
+
+### 1. Filtros Adicionais em `GET /transfers`
 
 **Status:** ⏸️ Pendente
 
@@ -300,7 +314,7 @@ Avaliar e implementar filtros adicionais baseados em requisitos de negócio.
 
 ---
 
-### 3. Endpoints de Consulta ao Ledger de Transações
+### 2. Endpoints de Consulta ao Ledger de Transações
 
 **Status:** ⏸️ Pendente
 
@@ -343,10 +357,11 @@ Inicialmente foi considerado lock otimista via `@Version` para evitar conflitos.
 
 | Mês | Mudança Principal | Impacto |
 |---|---|---|
-| 2026-01 | Implementação base com DDD | Contextos isolados, value objects |
-| 2026-02 | Migração para Kafka | Desacoplamento completo entre contextos |
-| 2026-03 | Lock pessimista + idempotência | Consistência em transferências concorrentes |
+| 2026-03 | Implementação base com DDD | Contextos isolados, value objects |
+| 2026-03 | Migração para Kafka | Desacoplamento completo entre contextos |
+| 2026-03 | Lock pessimista + idempotência em transferências | Consistência em transferências concorrentes |
 | 2026-03 | Retry + DLT | Resiliência em cenários de falha |
+| 2026-03 | Idempotência em ledger de transações | Prevenção de duplicações no histórico financeiro |
 
 ---
 

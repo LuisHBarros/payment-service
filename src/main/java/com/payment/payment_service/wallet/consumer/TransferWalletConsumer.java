@@ -2,7 +2,6 @@ package com.payment.payment_service.wallet.consumer;
 
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.payment.payment_service.shared.event.TransferStatusChangedEvent;
 import com.payment.payment_service.shared.kafka.KafkaEventProducer;
@@ -37,7 +36,6 @@ public class TransferWalletConsumer {
         }
     }
 
-    @Transactional
     private void processTransfer(TransferCreatedEvent event) {
         try {
             // Process transfer with lock ordering to prevent deadlocks

@@ -12,6 +12,7 @@ import com.payment.payment_service.user.value_object.Password;
 import com.payment.payment_service.user.value_object.Document;
 import com.payment.payment_service.shared.crypto.HashUtil;
 import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.payment.payment_service.shared.metrics.PaymentMetrics;
 import com.payment.payment_service.shared.event.UserCreatedEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,11 +24,13 @@ public class CreateUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final KafkaEventProducer kafkaEventProducer;
+    private final PaymentMetrics metrics;
 
-    public CreateUserService(UserRepository userRepository, PasswordEncoder passwordEncoder, KafkaEventProducer kafkaEventProducer) {
+    public CreateUserService(UserRepository userRepository, PasswordEncoder passwordEncoder, KafkaEventProducer kafkaEventProducer, PaymentMetrics metrics) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.kafkaEventProducer = kafkaEventProducer;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -55,7 +58,7 @@ public class CreateUserService {
 
         userRepository.save(user);
         kafkaEventProducer.publishUserCreated(new UserCreatedEvent(user.getId()));
-
+        metrics.recordUserCreated(user.getType().name());
         return user.getId();
     }
 }

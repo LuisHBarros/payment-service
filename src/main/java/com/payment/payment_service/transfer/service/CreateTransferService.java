@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.payment_service.shared.entity.OutboxEntity;
+import com.payment.payment_service.shared.metrics.PaymentMetrics;
 import com.payment.payment_service.shared.repository.OutboxRepository;
 import com.payment.payment_service.shared.type.TransferStatus;
 import com.payment.payment_service.transfer.entity.TransferEntity;
@@ -28,6 +29,7 @@ public class CreateTransferService {
     private final TransferAuthorizationService transferAuthorizationService;
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final PaymentMetrics metrics;
 
     @Transactional
     public UUID execute(UUID sourceWalletId, UUID destinationWalletId, BigDecimal amount) {
@@ -54,6 +56,7 @@ public class CreateTransferService {
             transfer.getAmount()
         );
         saveOutbox("TRANSFER_CREATED", transfer.getId(), event);
+        metrics.recordTransferCreated(amount);
         return transfer.getId();
     }
     

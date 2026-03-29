@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 
+import com.payment.payment_service.shared.metrics.PaymentMetrics;
 import com.payment.payment_service.shared.type.TransferStatus;
 import com.payment.payment_service.transfer.entity.TransferEntity;
 import com.payment.payment_service.transfer.exception.TransferNotFoundException;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 public class TransferStatusUpdateService {
     
     private final TransferRepository transferRepository;
+    private final PaymentMetrics metrics;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void execute(@NonNull UUID transferID, @NonNull TransferStatus newStatus){
@@ -26,5 +28,10 @@ public class TransferStatusUpdateService {
             .orElseThrow(() -> new TransferNotFoundException("Transfer not found"));
         transfer.setStatus(newStatus);
         transferRepository.save(transfer);
+        if (newStatus == TransferStatus.COMPLETED) {
+            metrics.recordTransferCompleted();
+        } else if (newStatus == TransferStatus.FAILED) {
+            metrics.recordTransferFailed("processing_error");
+        }
     }
 }

@@ -33,7 +33,17 @@ spring:
 rate-limit:
   enabled: false
 
+stripe:
+  secret-key: sk_test_fake
+
+payment:
+  provider: STRIPE
+  webhook_secret: whsec_test_fake
+  webhook_header_name: Stripe-Signature
+
 outbox:
   poll-interval: 100
+  kafka-ack-timeout-ms: 1000
+  max-attempts: 3
   cleanup:
-    interval: 999999999
+    retention-days: 1

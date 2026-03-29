@@ -22,6 +22,7 @@ import com.payment.payment_service.transaction.repository.TransactionRepository;
 import com.payment.payment_service.transfer.repository.TransferRepository;
 import com.payment.payment_service.transfer.service.CreateTransferService;
 import com.payment.payment_service.user.repository.UserRepository;
+import com.payment.payment_service.wallet.repository.DepositRepository;
 import com.payment.payment_service.wallet.repository.ProcessedTransferRepository;
 import com.payment.payment_service.wallet.repository.WalletRepository;
 
@@ -89,6 +90,9 @@ public abstract class AbstractIntegrationTest {
     protected OutboxRepository outboxRepository;
 
     @Autowired
+    protected DepositRepository depositRepository;
+
+    @Autowired
     protected ProcessedTransferRepository processedTransferRepository;
 
     @Autowired
@@ -109,6 +113,7 @@ public abstract class AbstractIntegrationTest {
         processedTransferRepository.deleteAllInBatch();
         transactionRepository.deleteAllInBatch();
         transferRepository.deleteAllInBatch();
+        depositRepository.deleteAllInBatch();
         walletRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
     }

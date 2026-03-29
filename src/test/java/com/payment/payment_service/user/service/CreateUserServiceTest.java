@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.payment.payment_service.shared.metrics.PaymentMetrics;
 import com.payment.payment_service.user.entity.UserEntity;
 import com.payment.payment_service.user.exceptions.UserDocumentException;
 import com.payment.payment_service.user.exceptions.UserEmailException;
@@ -34,7 +35,10 @@ class CreateUserServiceTest {
 
     @Mock
     private KafkaEventProducer kafkaEventProducer;
-    
+
+    @Mock
+    private PaymentMetrics metrics;
+
     @InjectMocks
     private CreateUserService createUserService;
 
@@ -47,7 +51,7 @@ class CreateUserServiceTest {
 
     @BeforeEach
     void setUp() {
-        reset(userRepository, passwordEncoder);
+        reset(userRepository, passwordEncoder, kafkaEventProducer, metrics);
     }
 
     @Test

@@ -25,7 +25,7 @@ Nenhum problema critico aberto no estado atual do repositorio.
 | # | Item | Status | Observacoes |
 |---|---|---|---|
 | 1 | Cobertura de auth/security ainda parcial | PARCIAL | JWT e ownership ja possuem testes dedicados; `RateLimitFilter` segue sem suite focada |
-| 2 | CI nao executa `mvn verify` | ABERTO | `.github/workflows/ci.yml` ainda usa somente `mvn test -B` |
+| 2 | CI executa `mvn verify` | RESOLVIDO | `.github/workflows/ci.yml` agora roda `./mvnw --batch-mode --no-transfer-progress verify` e publica relatorios de teste |
 | 3 | Outbox sem testes diretos | PARCIAL | Fluxos de integracao exercitam o caminho indiretamente, mas `OutboxPublisher` ainda nao tem suite propria |
 | 4 | Webhook de deposito | RESOLVIDO | Assinatura validada e cenarios principais cobertos por testes |
 | 5 | Tratamento de erros do payment provider | RESOLVIDO | Resilience4j com retry, circuit breaker, fallback e testes dedicados |
@@ -57,11 +57,10 @@ Nenhum problema critico aberto no estado atual do repositorio.
 
 ## Proximos passos recomendados
 
-1. Trocar o CI de `mvn test -B` para `mvn verify` e estabilizar a execucao de integracao no GitHub Actions.
-2. Criar testes diretos para `OutboxPublisher`, cobrindo sucesso, timeout de ack, max-attempts e cleanup.
-3. Cobrir `RateLimitFilter` com testes que validem throttling real contra Redis/Testcontainers.
-4. Fortalecer a politica de senha.
-5. Revisar `AesEncryptor` para charset explicito e possivel migracao de CBC para GCM.
-6. Adicionar novos providers de pagamento atras da interface `PaymentProvider`.
-7. Planejar notificacoes de deposito.
-8. Evoluir a observabilidade com metricas de host/container.
+1. Criar testes diretos para `OutboxPublisher`, cobrindo sucesso, timeout de ack, max-attempts e cleanup.
+2. Cobrir `RateLimitFilter` com testes que validem throttling real contra Redis/Testcontainers.
+3. Fortalecer a politica de senha.
+4. Revisar `AesEncryptor` para charset explicito e possivel migracao de CBC para GCM.
+5. Adicionar novos providers de pagamento atras da interface `PaymentProvider`.
+6. Planejar notificacoes de deposito.
+7. Evoluir a observabilidade com metricas de host/container.

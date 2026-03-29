@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -108,9 +109,9 @@ public class DepositController {
     @PostMapping("/api/v1/webhooks/deposits")
     @Operation(
         summary = "Receive deposit webhook",
-        description = "Receives payment-provider webhook notifications for deposit state changes.",
-        security = {}
+        description = "Receives payment-provider webhook notifications for deposit state changes."
     )
+    @SecurityRequirements
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Webhook processed or intentionally ignored"),
         @ApiResponse(responseCode = "400", description = "Invalid webhook payload"),

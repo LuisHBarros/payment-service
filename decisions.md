@@ -140,6 +140,6 @@ Expor metricas de negocio e operacionais via Actuator/Micrometer e provisionar d
 ## Tradeoffs e limites atuais
 
 - O unico payment provider implementado hoje e `STRIPE`.
-- O CI ainda executa apenas `mvn test -B`; a suite de integracao do Failsafe nao roda no GitHub Actions.
+- O CI executa `./mvnw --batch-mode --no-transfer-progress verify` no GitHub Actions; falhas ficam diagnosticaveis via artifacts de Surefire e Failsafe.
 - `logback-spring.xml` ainda usa padrao textual simples; logging JSON nao esta ativo no codigo atual.
 - `AesEncryptor` ainda merece revisao para charset explicito e possivel migracao de CBC para GCM.

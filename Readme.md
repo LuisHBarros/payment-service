@@ -297,7 +297,7 @@ Para testar endpoints protegidos pela UI, faca login em `POST /api/v1/auth/login
 ./mvnw verify    # inclui testes de integração do Failsafe (Testcontainers)
 ```
 
-> **CI:** `.github/workflows/ci.yml` executa apenas `mvn test -B`. Os testes de integração do Failsafe ainda não rodam no GitHub Actions.
+> **CI:** `.github/workflows/ci.yml` executa `./mvnw --batch-mode --no-transfer-progress verify` no GitHub Actions. Em caso de falha, os relatórios de Surefire e Failsafe ficam publicados como artifact.
 
 ---
 
@@ -305,7 +305,7 @@ Para testar endpoints protegidos pela UI, faca login em `POST /api/v1/auth/login
 
 | Prioridade | Item | Status |
 |---|---|---|
-| Alta | CI executar `mvn verify` com integração no GitHub Actions | Aberto |
+| Alta | CI executar `mvn verify` com integração no GitHub Actions | Resolvido |
 | Alta | Testes diretos para `OutboxPublisher` | Parcial |
 | Alta | Testes de throttling para `RateLimitFilter` | Aberto |
 | Média | Política de senha com requisitos de complexidade | Aberto |

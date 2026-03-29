@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,9 +42,9 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(
         summary = "Authenticate user",
-        description = "Authenticates with email or document and returns a JWT access token.",
-        security = {}
+        description = "Authenticates with email or document and returns a JWT access token."
     )
+    @SecurityRequirements
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Authenticated successfully"),
         @ApiResponse(

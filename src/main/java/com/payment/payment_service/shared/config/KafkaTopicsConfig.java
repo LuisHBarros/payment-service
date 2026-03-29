@@ -26,6 +26,9 @@ public class KafkaTopicsConfig {
     @Value("${kafka.topics.transfer-status}")
     private String transferStatusTopic;
 
+    @Value("${kafka.topics.deposit-completed}")
+    private String depositCompletedTopic;
+
     @Bean
     public NewTopic usersTopic() {
         return TopicBuilder.name(Objects.requireNonNull(usersTopic))
@@ -104,5 +107,16 @@ public class KafkaTopicsConfig {
             .partitions(1)
             .replicas(1)
             .build();
+    }
+    @Bean
+    public NewTopic depositCompletedTopic() {
+        return TopicBuilder.name(Objects.requireNonNull(depositCompletedTopic))
+            .partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic depositCompletedTopicDlt() {
+        return TopicBuilder.name(Objects.requireNonNull(depositCompletedTopic) + ".DLT")
+            .partitions(1).replicas(1).build();
     }
 }

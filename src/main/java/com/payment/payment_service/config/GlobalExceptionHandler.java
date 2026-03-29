@@ -19,6 +19,8 @@ import com.payment.payment_service.user.exceptions.UserEmailException;
 import com.payment.payment_service.user.exceptions.UserNotFoundException;
 import com.payment.payment_service.user.exceptions.UserPasswordException;
 import com.payment.payment_service.wallet.exception.InsufficientBalanceException;
+import com.payment.payment_service.wallet.exception.InvalidPaymentProviderException;
+import com.payment.payment_service.wallet.exception.PaymentProviderException;
 import com.payment.payment_service.wallet.exception.WalletAlreadyExistsException;
 import com.payment.payment_service.wallet.exception.WalletNotFoundException;
 
@@ -77,6 +79,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(AccessDeniedException e) {
         return build(HttpStatus.FORBIDDEN, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPaymentProviderException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(InvalidPaymentProviderException e) {
+        return build(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+    }
+
+    @ExceptionHandler(PaymentProviderException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentProviderException(PaymentProviderException e) {
+        return build(HttpStatus.BAD_GATEWAY, e.getMessage());
     }
 
     

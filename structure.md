@@ -36,11 +36,15 @@ com.payment.payment_service
 ### `shared`
 
 - `shared/config` contém a configuração de consumers e tópicos do Kafka.
+- `shared/crypto/AesEncryptor` e `HashUtil` provêm criptografia e hash para dados sensíveis.
 - `shared/entity/OutboxEntity` e `shared/repository/OutboxRepository` sustentam a tabela de outbox.
+- `shared/event` define os eventos de domínio: `UserCreatedEvent`, `WalletDebitedEvent`, `WalletCreditedEvent`, `DepositCompletedEvent`, `TransferStatusChangedEvent`.
 - `shared/kafka/KafkaEventProducer` envia eventos tipados para o Kafka.
 - `shared/kafka/OutboxPublisher` busca linhas pendentes, aguarda os acks do Kafka, registra métricas e executa recuperação/limpeza.
 - `shared/metrics/PaymentMetrics` centraliza contadores e timers customizados do Micrometer.
 - `shared/query` expõe contratos de leitura entre módulos usados por controllers e services.
+- `shared/tracing/OtelConfig`, `KafkaTracingPropagator` e `TracingUtils` provêm integração com OpenTelemetry para tracing distribuído.
+- `shared/type/TransferStatus` e `TransferType` definem enums de status e tipo de transferência.
 
 ### `user`
 

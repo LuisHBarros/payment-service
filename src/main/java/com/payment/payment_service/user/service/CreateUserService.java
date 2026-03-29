@@ -10,9 +10,12 @@ import com.payment.payment_service.user.type.UserType;
 import com.payment.payment_service.user.value_object.Email;
 import com.payment.payment_service.user.value_object.Password;
 import com.payment.payment_service.user.value_object.Document;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.payment_service.shared.crypto.HashUtil;
-import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.payment.payment_service.shared.entity.OutboxEntity;
 import com.payment.payment_service.shared.metrics.PaymentMetrics;
+import com.payment.payment_service.shared.repository.OutboxRepository;
 import com.payment.payment_service.shared.event.UserCreatedEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,7 +29,8 @@ public class CreateUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final KafkaEventProducer kafkaEventProducer;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
     private final PaymentMetrics metrics;
 
     @Transactional
@@ -53,8 +57,22 @@ public class CreateUserService {
         user.setDocumentHash(documentHash);
 
         userRepository.save(user);
-        kafkaEventProducer.publishUserCreated(new UserCreatedEvent(user.getId()));
+        saveOutbox(user.getId());
         metrics.recordUserCreated(user.getType().name());
         return user.getId();
+    }
+
+    private void saveOutbox(UUID userId) {
+        try {
+            var event = new UserCreatedEvent(userId);
+            var outbox = new OutboxEntity();
+            outbox.setAggregateId(userId);
+            outbox.setAggregateType("user");
+            outbox.setEventType("USER_CREATED");
+            outbox.setPayload(objectMapper.writeValueAsString(event));
+            outboxRepository.save(outbox);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize user created event", e);
+        }
     }
 }

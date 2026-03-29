@@ -14,8 +14,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import com.payment.payment_service.shared.kafka.KafkaEventProducer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.payment.payment_service.shared.entity.OutboxEntity;
 import com.payment.payment_service.shared.metrics.PaymentMetrics;
+import com.payment.payment_service.shared.repository.OutboxRepository;
 import com.payment.payment_service.user.entity.UserEntity;
 import com.payment.payment_service.user.exception.UserDocumentException;
 import com.payment.payment_service.user.exception.UserEmailException;
@@ -34,7 +37,10 @@ class CreateUserServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private KafkaEventProducer kafkaEventProducer;
+    private OutboxRepository outboxRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
 
     @Mock
     private PaymentMetrics metrics;
@@ -51,11 +57,11 @@ class CreateUserServiceTest {
 
     @BeforeEach
     void setUp() {
-        reset(userRepository, passwordEncoder, kafkaEventProducer, metrics);
+        reset(userRepository, passwordEncoder, outboxRepository, objectMapper, metrics);
     }
 
     @Test
-    void execute_WithValidData_ShouldCreateUserAndReturnId() {
+    void execute_WithValidData_ShouldCreateUserAndReturnId() throws JsonProcessingException {
         // Arrange
         when(userRepository.existsByEmail(any(Email.class))).thenReturn(false);
         when(userRepository.existsByDocumentHash(anyString())).thenReturn(false);
@@ -65,6 +71,7 @@ class CreateUserServiceTest {
             user.setId(UUID.randomUUID());
             return user;
         });
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         // Act
         UUID userId = createUserService.execute(validName, validEmail, validPassword, validDocument);
@@ -72,7 +79,10 @@ class CreateUserServiceTest {
         // Assert
         assertNotNull(userId);
         verify(userRepository).save(any(UserEntity.class));
+        verify(outboxRepository).save(any(OutboxEntity.class));
+        verify(objectMapper).writeValueAsString(any());
         verify(passwordEncoder).encode(anyString());
+        verify(metrics).recordUserCreated(anyString());
         }
 
     @Test
@@ -153,5 +163,89 @@ class CreateUserServiceTest {
         verify(userRepository).save(argThat(user ->
             user.getType() != null && (user.getType() == UserType.COMMON || user.getType() == UserType.MERCHANT)
         ));
+    }
+
+    @Test
+    void execute_ShouldSaveOutboxEntryWithCorrectData() throws JsonProcessingException {
+        // Arrange
+        UUID userId = UUID.randomUUID();
+        when(userRepository.existsByEmail(any(Email.class))).thenReturn(false);
+        when(userRepository.existsByDocumentHash(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
+            UserEntity user = invocation.getArgument(0);
+            user.setId(userId);
+            return user;
+        });
+        when(objectMapper.writeValueAsString(any())).thenReturn("{\"userId\":\"" + userId + "\"}");
+
+        // Act
+        createUserService.execute(validName, validEmail, validPassword, validDocument);
+
+        // Assert
+        verify(outboxRepository).save(argThat(outbox -> {
+            assertEquals("user", outbox.getAggregateType());
+            assertEquals(userId, outbox.getAggregateId());
+            assertEquals("USER_CREATED", outbox.getEventType());
+            assertNotNull(outbox.getPayload());
+            assertFalse(outbox.isProcessed());
+            return true;
+        }));
+    }
+
+    @Test
+    void execute_ShouldUseOutboxPatternNotDirectKafka() throws JsonProcessingException {
+        // Arrange
+        when(userRepository.existsByEmail(any(Email.class))).thenReturn(false);
+        when(userRepository.existsByDocumentHash(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        // Act
+        createUserService.execute(validName, validEmail, validPassword, validDocument);
+
+        // Assert
+        verify(outboxRepository).save(any(OutboxEntity.class));
+        verify(objectMapper).writeValueAsString(any());
+    }
+
+    @Test
+    void execute_ShouldSerializeUserCreatedEventCorrectly() throws JsonProcessingException {
+        // Arrange
+        UUID userId = UUID.randomUUID();
+        when(userRepository.existsByEmail(any(Email.class))).thenReturn(false);
+        when(userRepository.existsByDocumentHash(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> {
+            UserEntity user = invocation.getArgument(0);
+            user.setId(userId);
+            return user;
+        });
+        when(objectMapper.writeValueAsString(any())).thenReturn("{\"userId\":\"" + userId + "\"}");
+
+        // Act
+        createUserService.execute(validName, validEmail, validPassword, validDocument);
+
+        // Assert
+        verify(objectMapper).writeValueAsString(argThat(event -> {
+            assertTrue(event.toString().contains(userId.toString()));
+            return true;
+        }));
+    }
+
+    @Test
+    void execute_ShouldRollbackWhenOutboxSaveFails() throws JsonProcessingException {
+        // Arrange
+        when(userRepository.existsByEmail(any(Email.class))).thenReturn(false);
+        when(userRepository.existsByDocumentHash(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("Serialization error") {});
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () ->
+            createUserService.execute(validName, validEmail, validPassword, validDocument)
+        );
     }
 }

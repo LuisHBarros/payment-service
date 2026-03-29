@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.payment_service.shared.entity.OutboxEntity;
 import com.payment.payment_service.shared.event.DepositCompletedEvent;
+import com.payment.payment_service.shared.event.UserCreatedEvent;
 import com.payment.payment_service.shared.event.WalletCreditedEvent;
 import com.payment.payment_service.shared.event.WalletDebitedEvent;
 import com.payment.payment_service.shared.metrics.PaymentMetrics;
@@ -97,6 +98,10 @@ public class OutboxPublisher {
                 var event = objectMapper.readValue(entry.getPayload(), TransferCreatedEvent.class);
                 yield kafkaEventProducer.publishTransferCreated(event);
             }
+            case "USER_CREATED" -> {
+                var event = objectMapper.readValue(entry.getPayload(), UserCreatedEvent.class);
+                yield kafkaEventProducer.publishUserCreated(event);
+            }
             case "DEPOSIT_COMPLETED" -> {
                 var event = objectMapper.readValue(entry.getPayload(), DepositCompletedEvent.class);
                 yield kafkaEventProducer.publishDepositCompleted(event);
@@ -133,6 +138,13 @@ public class OutboxPublisher {
                 // Manual reconciliation required
                 log.error("CRITICAL: Wallet event for transferId={} never published after {} attempts. " +
                         "Manual reconciliation required.", entry.getAggregateId(), maxAttempts);
+            }
+            case "USER_CREATED" -> {
+                var event = objectMapper.readValue(entry.getPayload(), UserCreatedEvent.class);
+                log.error("CRITICAL: UserCreatedEvent for userId={} never published after {} attempts. " +
+                        "Manual reconciliation required. User exists in database but downstream " +
+                        "services may not be aware of this user.",
+                        event.userId(), maxAttempts);
             }
             default -> log.warn("Unknown event type {} in recovery", entry.getEventType());
         }

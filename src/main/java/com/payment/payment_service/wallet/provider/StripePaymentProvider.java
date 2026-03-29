@@ -1,6 +1,8 @@
 package com.payment.payment_service.wallet.provider;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +17,7 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.Event;
+import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
 
@@ -48,11 +51,32 @@ public class StripePaymentProvider implements PaymentProvider {
             PaymentIntent intent = PaymentIntent.create(params);
             log.info("Created Stripe PaymentIntent intent={} userId={} walletId={}",
                 intent.getId(), userId, walletId);
+
+            // Create a simplified JSON object with only primitive values
+            Map<String, Object> responseMap = new HashMap<>();
+            responseMap.put("id", intent.getId());
+            responseMap.put("amount", intent.getAmount());
+            responseMap.put("currency", intent.getCurrency());
+            responseMap.put("status", intent.getStatus() != null ? intent.getStatus().toString() : null);
+            responseMap.put("clientSecret", intent.getClientSecret());
+
+            // Handle metadata safely - convert to simple map
+            Map<String, String> metadataMap = new HashMap<>();
+            if (intent.getMetadata() != null) {
+                metadataMap.putAll(intent.getMetadata());
+            }
+            responseMap.put("metadata", metadataMap);
+
+            // Handle created timestamp
+            responseMap.put("created", intent.getCreated() != null ? intent.getCreated() : null);
+
+            String rawResponse = objectMapper.writeValueAsString(responseMap);
+
             return new PaymentProviderResponse(
                 intent.getClientSecret(),
                 intent.getId(),
                 mapStripeStatus(intent.getStatus()),
-                objectMapper.writeValueAsString(intent)
+                rawResponse
             );
         } catch (StripeException e) {
             log.error("Stripe error creating PaymentIntent userId={} walletId={}", userId, walletId, e);
@@ -77,12 +101,25 @@ public class StripePaymentProvider implements PaymentProvider {
             log.info("Ignoring unsupported Stripe event type={}", event.getType());
             return Optional.empty();
         }
+        String paymentIntentId;
+        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        if (deserializer.getObject().isPresent()) {
+             paymentIntentId = ((PaymentIntent) deserializer.getObject().get()).getId();
+        } else {
+            log.warn("API version mismatch for event type={}, falling back to raw JSON deserialization", event.getType());
+            try {
+                String rawJson = event.getData().toJson();
+                paymentIntentId = objectMapper.readTree(rawJson).path("object").path("id").asText();
+                if (paymentIntentId == null || paymentIntentId.isEmpty()) {
+                    throw new PaymentProviderException(
+                        "Could not extract PaymentIntent ID from Stripe event type=" + event.getType(), null);
+                }
+            } catch (JsonProcessingException e) {
+                throw new PaymentProviderException(
+                    "Could not deserialize PaymentIntent from Stripe event type=" + event.getType(), e);
+            }
+        }
 
-        String paymentIntentId = event.getDataObjectDeserializer()
-            .getObject()
-            .map(obj -> ((PaymentIntent) obj).getId())
-            .orElseThrow(() -> new PaymentProviderException(
-                "Could not deserialize PaymentIntent from Stripe event type=" + event.getType(), null));
 
         return Optional.of(new WebhookResult(paymentIntentId, status));
     }

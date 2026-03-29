@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git cherry-pick:*)",
+      "Bash(git stash:*)",
+      "Bash(mvn test:*)",
+      "Bash(find /usr -name \"mvn\")",
+      "Bash(find /opt -name \"mvn\")",
+      "Bash(./mvnw test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(mvn clean:*)",
+      "Bash(find target/surefire-reports -name *AuthControllerIT* -type f)",
+      "Bash(xargs cat:*)",
+      "Bash(./mvnw compile:*)",
+      "Bash(./mvnw test-compile:*)"
+    ]
+  }
+}

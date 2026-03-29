@@ -106,7 +106,7 @@ public class TransferConsumer {
                 transferId,
                 ex
             );
-            throw ex;
+            throw new RuntimeException("Failed to publish transfer completion", ex);
         }
     }
 

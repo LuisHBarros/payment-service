@@ -29,14 +29,27 @@ kafka:
     wallet-credits: payment.wallet.credits
     transfer-created: payment.transfer.created
     transfer-status: payment.transfer.status
+    deposit-completed: payment.deposit.completed
 
 
 outbox:
   poll-interval: 500
+  kafka-ack-timeout-ms: 5000
   max-attempts: 10
   cleanup:
     retention-days: 7
-    interval: 60000 # 1 minute
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, prometheus, info
+  endpoint:
+    health:
+      show-details: when-authorized   # não expõe detalhes pra usuário não autenticado
+  metrics:
+    tags:
+      application: payment-service    # tag global em todas as métricas
 
 
 jwt:

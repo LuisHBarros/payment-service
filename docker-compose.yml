@@ -88,8 +88,32 @@ services:
 
       # Application configuration
       APP_CRYPTO_SECRET: ${APP_CRYPTO_SECRET:-dev-only-secret-key-change-me}
+      JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8080:8080"
+    networks:
+      - payment-network
+
+  
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - payment-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
     networks:
       - payment-network
 

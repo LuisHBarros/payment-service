@@ -44,8 +44,8 @@ Nenhum problema crítico em aberto.
 | # | Issue | Status | Observações |
 |---|-------|--------|-------------|
 | 1 | Configuração CORS ausente | **RESOLVIDO** | `CorsConfigurationSource` em `SecurityConfig.java:67-77` com origins `localhost:3000/3333` |
-| 2 | Cobertura de testes de auth/security incompleta | ABERTO | Sem testes dedicados para `JwtService`, `JwtAuthenticationFilter`, `RateLimitFilter` e `SecurityUtils` |
-| 3 | Testes de Kafka consumer e outbox ausentes | **PARCIAL** | `TransferFlowIT` cobre consumers indiretamente, mas `DepositConsumer` e `OutboxPublisher` não têm testes diretos |
+| 2 | Cobertura de testes de auth/security incompleta | **PARCIAL** | `JwtServiceTest` (7), `JwtAuthenticationFilterTest` (7) e `SecurityUtilsTest` (4) adicionados; `RateLimitFilter` deixado de fora por exigir Redis real via Testcontainers + Bucket4j proxy manager, o que eleva complexidade e tempo de runtime significativamente |
+| 3 | Testes de Kafka consumer e outbox ausentes | **PARCIAL** | `TransferFlowIT` cobre consumers indiretamente. Agora 5 consumers têm testes unitários dedicados: `CreateWalletConsumerTest`, `TransferWalletConsumerTest`, `TransferConsumerTest`, `DepositConsumerTest`, `TransferStatusConsumerTest`. `OutboxPublisher` continua sem testes diretos |
 | 4 | CI executa apenas `mvn test` | ABERTO | `.github/workflows/ci.yml` ainda usa `mvn test -B`; integration tests (failsafe) não rodam no CI |
 | 5 | Segurança do webhook de depósito | **RESOLVIDO** | 6 testes em 2 arquivos cobrem cenários de assinatura válida, inválida e evento não suportado |
 | 6 | Tratamento de erros do payment provider | ABERTO | `@EnableRetry` declarado sem `@Retryable`; sem circuit breaker; sem fallback provider |
@@ -78,20 +78,20 @@ Nenhum problema crítico em aberto.
 | wallet services | BOM | Lógica de criação/busca de wallet coberta |
 | transfer services | BOM | `GetTransferServiceTest` e `TransferAuthorizationServiceTest` existem |
 | deposit services | MODERADO | Testes básicos de criação e processamento de depósito existem |
-| auth | MODERADO | `AuthControllerIT` existe, mas cobertura de JWT/filter é ausente |
+| auth | BOM | `AuthControllerIT` + `JwtServiceTest` (7) + `JwtAuthenticationFilterTest` (7) |
 | controllers (integração) | MODERADO | Suite básica para auth, transfers, wallet e fluxo feliz |
 | payment providers | MODERADO | Testes para Stripe existem |
-| Kafka consumers | BAIXO | Sem testes dedicados para listeners |
+| Kafka consumers | BOM | 5 consumers com testes unitários dedicados (`CreateWallet`, `TransferWallet`, `Transfer`, `Deposit`, `TransferStatus`) |
 | Kafka producer / outbox | BAIXO | Sem testes diretos para callback de producer ou polling/limpeza de outbox |
-| rate limiting | BAIXO | Sem testes focados em throttling |
-| helpers de autorização | BAIXO | Sem testes diretos para checagens de ownership em `SecurityUtils` |
+| rate limiting | BAIXO | Sem testes focados em throttling; deixado de fora por complexidade (Bucket4j + Redis via Testcontainers) |
+| helpers de autorização | BOM | `SecurityUtilsTest` (4 testes) cobre ownership e bypass ADMIN |
 | observabilidade | BAIXO | Sem testes para coleta de métricas e logging |
 
 ---
 
 ## Próximos Passos Recomendados
 
-1. Adicionar testes focados para JWT auth, rate limiting, checagens de ownership e listeners Kafka.
+1. ~~Adicionar testes focados para JWT auth, rate limiting, checagens de ownership e listeners Kafka.~~ JWT auth (14 testes), ownership (4 testes) e Kafka consumers (12 testes) implementados. `RateLimitFilter` deixado de fora por exigir Redis real + Bucket4j proxy manager (complexidade e tempo de runtime elevados).
 2. Alterar CI de `mvn test` para `mvn verify` para que integration tests rodem no GitHub Actions.
 3. Implementar retry/circuit breaker para chamadas ao payment provider (`@Retryable` já habilitado mas não utilizado).
 4. Melhorar tratamento de erros e estratégias de recuperação do payment provider.

@@ -338,6 +338,7 @@ transfer.TransferStatusConsumer
 ```text
 src/test/java/com/payment/payment_service
 |-- config
+|   |-- SecurityUtilsTest
 |   `-- TestRedisConfig
 |-- integration
 |   |-- AbstractIntegrationTest
@@ -346,11 +347,22 @@ src/test/java/com/payment/payment_service
 |   |-- TransferControllerIT
 |   |-- TransferFlowIT
 |   `-- WalletControllerIT
-|-- transaction/service
-|   `-- CreateTransactionServiceTest
-|-- transfer/service
-|   |-- GetTransferServiceTest
-|   `-- TransferAuthorizationServiceTest
+|-- auth
+|   |-- JwtAuthenticationFilterTest
+|   `-- service
+|       `-- JwtServiceTest
+|-- transaction
+|   |-- service
+|   |   `-- CreateTransactionServiceTest
+|   `-- consumer
+|       |-- DepositConsumerTest
+|       `-- TransferConsumerTest
+|-- transfer
+|   |-- service
+|   |   |-- GetTransferServiceTest
+|   |   `-- TransferAuthorizationServiceTest
+|   `-- consumer
+|       `-- TransferStatusConsumerTest
 |-- user/controller
 |   `-- UserControllerTest
 |-- user/service
@@ -360,9 +372,13 @@ src/test/java/com/payment/payment_service
 |   |-- PatchUserServiceTest
 |   |-- UpdatePasswordServiceTest
 |   `-- UpdateUserEmailServiceTest
-`-- wallet/service
-    |-- CreateWalletServiceTest
-    `-- GetWalletServiceTest
+`-- wallet
+    |-- service
+    |   |-- CreateWalletServiceTest
+    |   `-- GetWalletServiceTest
+    `-- consumer
+        |-- CreateWalletConsumerTest
+        `-- TransferWalletConsumerTest
 ```
 
 ## Current structural notes

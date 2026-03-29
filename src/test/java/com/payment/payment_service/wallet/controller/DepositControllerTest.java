@@ -38,6 +38,7 @@ import com.payment.payment_service.wallet.exception.WebhookSignatureException;
 import com.payment.payment_service.wallet.provider.PaymentProvider;
 import com.payment.payment_service.wallet.provider.WebhookResult;
 import com.payment.payment_service.wallet.service.CreateDepositService;
+import com.payment.payment_service.wallet.service.GetDepositsService;
 import com.payment.payment_service.wallet.service.ProcessDepositService;
 import com.payment.payment_service.wallet.type.DepositStatus;
 
@@ -73,6 +74,9 @@ class DepositControllerTest {
 
     @MockitoBean
     private JwtService jwtService;
+
+    @MockitoBean
+    private GetDepositsService getDepositsService;
 
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;

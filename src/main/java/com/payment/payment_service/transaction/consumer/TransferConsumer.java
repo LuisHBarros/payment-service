@@ -1,6 +1,7 @@
 package com.payment.payment_service.transaction.consumer;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -89,9 +90,10 @@ public class TransferConsumer {
 
     private void publishTransferCompletion(UUID transferId) {
         try {
-            kafkaEventProducer.publishTransferStatusChanged(
+            var future = kafkaEventProducer.publishTransferStatusChanged(
                 new TransferStatusChangedEvent(transferId, TransferStatus.COMPLETED)
             );
+            future.get(10, TimeUnit.SECONDS);
 
             log.info(
                 "Published TransferStatusChangedEvent(COMPLETED) transferId={}",
@@ -110,9 +112,10 @@ public class TransferConsumer {
 
     private void publishTransferFailure(UUID transferId) {
         try {
-            kafkaEventProducer.publishTransferStatusChanged(
+            var future = kafkaEventProducer.publishTransferStatusChanged(
                 new TransferStatusChangedEvent(transferId, TransferStatus.FAILED)
             );
+            future.get(10, TimeUnit.SECONDS);
 
             log.info(
                 "Published TransferStatusChangedEvent(FAILED) transferId={}",

@@ -50,8 +50,8 @@ public class KafkaEventProducer {
         return send(walletCreditsTopic, event.walletId().toString(), event);
     }
 
-    public void publishTransferStatusChanged(TransferStatusChangedEvent event) {
-        send(transferStatusTopic, event.transferId().toString(), event);
+    public CompletableFuture<SendResult<String, Object>> publishTransferStatusChanged(TransferStatusChangedEvent event) {
+        return send(transferStatusTopic, event.transferId().toString(), event);
     }
 
     public CompletableFuture<SendResult<String, Object>> publishTransferCreated(TransferCreatedEvent event) {

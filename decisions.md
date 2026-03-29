@@ -137,6 +137,26 @@ Expor metricas de negocio e operacionais via Actuator/Micrometer e provisionar d
 
 - a equipe precisa inspecionar latencia do outbox, volume de transferencias e falhas por motivo sem setup manual.
 
+## 8. CORS externalizado por propriedades
+
+**Status:** implementado
+
+**Decisao**
+
+Manter a politica de CORS fora do codigo, com binding via `@ConfigurationProperties`, em vez de hardcode de origins no `SecurityConfig`.
+
+**Como isso aparece no codigo**
+
+- `CorsProperties` concentra `allowedOrigins`, `allowedMethods`, `allowedHeaders` e `allowCredentials`.
+- `SecurityConfig` monta o `CorsConfigurationSource` a partir dessas propriedades.
+- `application.yaml` define os defaults e aceita override por variaveis de ambiente para as origins locais.
+
+**Motivo**
+
+- evita acoplamento entre ambiente local e configuracao de producao;
+- reduz risco de promover origins de desenvolvimento sem revisao;
+- mantem a mesma estrategia de externalizacao ja usada por `RateLimitProperties`.
+
 ## Tradeoffs e limites atuais
 
 - O unico payment provider implementado hoje e `STRIPE`.

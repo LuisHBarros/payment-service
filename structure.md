@@ -28,6 +28,7 @@ com.payment.payment_service
 ### `config`
 
 - `SecurityConfig` define rotas públicas, ordem do filtro JWT, CORS e política de sessão stateless.
+- `CorsProperties` externaliza origens, métodos, headers e credenciais de CORS via `application.yaml`.
 - `RateLimitConfig`, `RateLimitFilter` e `RateLimitProperties` fornecem limitação de taxa opcional.
 - `GlobalExceptionHandler` mapeia exceções de domínio para respostas HTTP.
 - `SecurityUtils.requireOwnership(...)` é a guarda padrão de ownership entre os controllers.
@@ -116,7 +117,7 @@ com.payment.payment_service
 
 | Arquivo | Finalidade |
 |---|---|
-| `src/main/resources/application.yaml` | Configuração principal de runtime, Kafka, Redis, rate limit e Resilience4j |
+| `src/main/resources/application.yaml` | Configuração principal de runtime, CORS, Kafka, Redis, rate limit e Resilience4j |
 | `src/main/resources/logback-spring.xml` | Padrão de logs no console |
 | `docker-compose.yml` | Stack local com app, postgres, kafka, redis, prometheus e grafana |
 | `prometheus.yml` | Configuração de scrape para `payment-service:8080/actuator/prometheus` |

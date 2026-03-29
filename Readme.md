@@ -18,6 +18,7 @@ O projeto é estruturado em contextos delimitados (`auth`, `user`, `wallet`, `tr
 Funcionalidades implementadas:
 
 - autenticação stateless com JWT e blacklist de tokens no Redis;
+- CORS configurável por propriedades externas;
 - ownership checks e autorização por papel (`COMMON`, `MERCHANT`, `ADMIN`);
 - rate limiting opcional com Bucket4j + Redis;
 - transferências com lock pessimista determinístico e idempotência via `ProcessedTransferEntity`;
@@ -241,7 +242,15 @@ APP_CRYPTO_SECRET=0123456789abcdef        # 16 bytes para AES
 JWT_SECRET=<base64-encoded-secret>
 STRIPE_SECRET_KEY=sk_test_xxx
 PAYMENT_WEBHOOK_SECRET=whsec_xxx
+CORS_ALLOWED_ORIGIN_1=http://localhost:3000
+CORS_ALLOWED_ORIGIN_2=http://localhost:3333
 ```
+
+Configurações relevantes de runtime:
+
+- `cors.allowed-origins` pode ser sobrescrito por `CORS_ALLOWED_ORIGIN_1` e `CORS_ALLOWED_ORIGIN_2`;
+- `cors.allowed-methods`, `cors.allowed-headers` e `cors.allow-credentials` ficam externalizados em `application.yaml`;
+- `rate-limit.*` continua externalizado no mesmo arquivo para throttling por endpoint.
 
 ### 2. Subir a stack
 

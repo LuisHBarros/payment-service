@@ -14,16 +14,24 @@ import com.payment.payment_service.auth.dto.LoginResponse;
 import com.payment.payment_service.auth.service.AuthService;
 import com.payment.payment_service.auth.service.JwtService;
 import com.payment.payment_service.config.AuthenticatedUser;
+import com.payment.payment_service.config.openapi.ApiErrorResponse;
 import com.payment.payment_service.user.dto.UserResponseDTO;
 import com.payment.payment_service.user.entity.UserEntity;
 import com.payment.payment_service.user.service.GetUserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController 
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Tag(name = "auth", description = "Authentication and current-session endpoints")
 public class AuthController {
 
     private final AuthService authService;
@@ -31,6 +39,24 @@ public class AuthController {
     private final GetUserService getUserService;
 
     @PostMapping("/login")
+    @Operation(
+        summary = "Authenticate user",
+        description = "Authenticates with email or document and returns a JWT access token.",
+        security = {}
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Authenticated successfully"),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Invalid credentials",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     public ResponseEntity<LoginResponse> login(@RequestBody @Valid LoginRequest request) {
         UserEntity user = authService.authenticate(request.getIdentifier(), request.getPassword());
         String token = jwtService.generateToken(user);
@@ -38,12 +64,30 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @Operation(summary = "Get current user", description = "Returns the authenticated user.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "User returned successfully"),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Missing or invalid token",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     public ResponseEntity<UserResponseDTO> me(@AuthenticationPrincipal AuthenticatedUser auth) {
         UserEntity user = getUserService.findById(auth.userId());
         return ResponseEntity.ok(toResponseDTO(user));
     }
 
     @PostMapping("/logout")
+    @Operation(summary = "Logout current session", description = "Revokes the current JWT token.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Token revoked successfully"),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Missing or invalid token",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
         authService.logout(authHeader);
         return ResponseEntity.noContent().build();

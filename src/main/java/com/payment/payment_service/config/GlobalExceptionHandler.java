@@ -11,6 +11,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.payment.payment_service.config.openapi.ApiErrorResponse;
 import com.payment.payment_service.transaction.exception.TransactionNotFoundException;
 import com.payment.payment_service.transfer.exception.TransferException;
 import com.payment.payment_service.transfer.exception.TransferNotFoundException;
@@ -30,75 +31,74 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    record ErrorResponse(int status, String error, String message) {}
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(UserNotFoundException e) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(UserNotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
     @ExceptionHandler(WalletNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(WalletNotFoundException e) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(WalletNotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
     @ExceptionHandler(TransferNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(TransferNotFoundException e) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(TransferNotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
     @ExceptionHandler(TransactionNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(TransactionNotFoundException e) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(TransactionNotFoundException e) {
         return build(HttpStatus.NOT_FOUND, e);
     }
     @ExceptionHandler(UserEmailException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(UserEmailException e) {
+    public ResponseEntity<ApiErrorResponse> handleConflict(UserEmailException e) {
         return build(HttpStatus.CONFLICT, e);
     }
     @ExceptionHandler(UserDocumentException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(UserDocumentException e) {
+    public ResponseEntity<ApiErrorResponse> handleConflict(UserDocumentException e) {
         return build(HttpStatus.CONFLICT, e);
     }
     @ExceptionHandler(WalletAlreadyExistsException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(WalletAlreadyExistsException e) {
+    public ResponseEntity<ApiErrorResponse> handleConflict(WalletAlreadyExistsException e) {
         return build(HttpStatus.CONFLICT, e);
     }
     @ExceptionHandler(UnauthorizedTransferException.class)
-    public ResponseEntity<ErrorResponse> handleForbidden(UnauthorizedTransferException e) {
+    public ResponseEntity<ApiErrorResponse> handleForbidden(UnauthorizedTransferException e) {
         return build(HttpStatus.FORBIDDEN, e);
     }
     @ExceptionHandler(UserPasswordException.class)
-    public ResponseEntity<ErrorResponse> handleUnprocessableEntity(UserPasswordException e) {
+    public ResponseEntity<ApiErrorResponse> handleUnprocessableEntity(UserPasswordException e) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, e);
     }
     @ExceptionHandler(InsufficientBalanceException.class)
-    public ResponseEntity<ErrorResponse> handleUnprocessableEntity(InsufficientBalanceException e) {
+    public ResponseEntity<ApiErrorResponse> handleUnprocessableEntity(InsufficientBalanceException e) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, e);
     }
     @ExceptionHandler(TransferException.class)
-    public ResponseEntity<ErrorResponse> handleUnprocessableEntity(TransferException e) {
+    public ResponseEntity<ApiErrorResponse> handleUnprocessableEntity(TransferException e) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, e);
     }
 
         @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ErrorResponse> handleUnauthorized(AuthenticationException e) {
+    public ResponseEntity<ApiErrorResponse> handleUnauthorized(AuthenticationException e) {
         return build(HttpStatus.UNAUTHORIZED, "Unauthorized");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleForbidden(AccessDeniedException e) {
+    public ResponseEntity<ApiErrorResponse> handleForbidden(AccessDeniedException e) {
         return build(HttpStatus.FORBIDDEN, e.getMessage());
     }
 
     @ExceptionHandler(InvalidPaymentProviderException.class)
-    public ResponseEntity<ErrorResponse> handleBadRequest(InvalidPaymentProviderException e) {
+    public ResponseEntity<ApiErrorResponse> handleBadRequest(InvalidPaymentProviderException e) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
     }
 
     @ExceptionHandler(PaymentProviderException.class)
-    public ResponseEntity<ErrorResponse> handlePaymentProviderException(PaymentProviderException e) {
+    public ResponseEntity<ApiErrorResponse> handlePaymentProviderException(PaymentProviderException e) {
         return build(HttpStatus.BAD_GATEWAY, e.getMessage());
     }
 
     
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         BindingResult bindingResult = e.getBindingResult();
         String message = bindingResult.getFieldErrors().stream()
             .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
@@ -107,16 +107,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, message);
     }
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnhandled(Exception e) {
+    public ResponseEntity<ApiErrorResponse> handleUnhandled(Exception e) {
         log.error("Unhandled exception", e);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
     }
-    private ResponseEntity<ErrorResponse> build(HttpStatus status, Exception e) {
+    private ResponseEntity<ApiErrorResponse> build(HttpStatus status, Exception e) {
         return build(status, e.getMessage());
     }
-    private ResponseEntity<ErrorResponse> build(HttpStatus status, String message) {
+    private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message) {
         return ResponseEntity.status(Objects.requireNonNull(status))
-            .body(new ErrorResponse(status.value(), status.getReasonPhrase(), message));
+            .body(new ApiErrorResponse(status.value(), status.getReasonPhrase(), message));
     }
 
 }

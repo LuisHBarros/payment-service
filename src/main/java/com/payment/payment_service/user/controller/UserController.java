@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.payment.payment_service.config.AuthenticatedUser;
 import com.payment.payment_service.config.SecurityUtils;
+import com.payment.payment_service.config.openapi.ApiErrorResponse;
 import com.payment.payment_service.user.dto.CreateUserRequestDTO;
 import com.payment.payment_service.user.dto.PatchUserRequestDTO;
 import com.payment.payment_service.user.dto.UserResponseDTO;
@@ -28,10 +29,17 @@ import com.payment.payment_service.user.service.DeleteUserService;
 import com.payment.payment_service.user.service.GetUserService;
 import com.payment.payment_service.user.service.PatchUserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/users")
+@Tag(name = "users", description = "User lifecycle endpoints")
 public class UserController {
 
     private final CreateUserService createUserService;
@@ -51,6 +59,25 @@ public class UserController {
     }
 
     @PostMapping
+    @Operation(summary = "Create user", description = "Creates a new user and returns the generated identifier.", security = {})
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "User created successfully"),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request body",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Email or document already exists",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "422",
+            description = "Password or business validation failed",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+        )
+    })
     public ResponseEntity<UUID> create(@RequestBody @Valid CreateUserRequestDTO request) {
         UUID userId = createUserService.execute(
             request.name(),
@@ -62,6 +89,7 @@ public class UserController {
     }
 
     @GetMapping
+    @Operation(summary = "List users", description = "Returns a paginated list of users. Requires ADMIN role.")
     public ResponseEntity<Page<UserResponseDTO>> findAll(@PageableDefault(size = 20) Pageable pageable,
             @AuthenticationPrincipal AuthenticatedUser auth) {
         Page<UserEntity> users = getUserService.findAll(pageable);
@@ -70,6 +98,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get user by id", description = "Returns a user when the caller is the owner or an admin.")
     public ResponseEntity<UserResponseDTO> findById(@PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser auth) {
         SecurityUtils.requireOwnership(auth, id);
@@ -78,6 +107,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
+    @Operation(summary = "Patch user", description = "Updates email and/or password for the target user.")
     public ResponseEntity<UserResponseDTO> patch(
             @PathVariable UUID id,
             @RequestBody PatchUserRequestDTO request,
@@ -88,6 +118,7 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete user", description = "Deletes the target user.")
     public ResponseEntity<Void> delete(@PathVariable UUID id,
             @AuthenticationPrincipal AuthenticatedUser auth) {
         SecurityUtils.requireOwnership(auth, id);

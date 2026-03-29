@@ -216,6 +216,14 @@ curl http://localhost:8080/actuator/prometheus
 curl http://localhost:8080/actuator/metrics
 ```
 
+### 4. OpenAPI e Swagger UI
+
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- JSON OpenAPI: `http://localhost:8080/v3/api-docs`
+- YAML OpenAPI: `http://localhost:8080/v3/api-docs.yaml`
+
+Para testar endpoints protegidos pela UI, faca login em `POST /api/v1/auth/login`, copie o JWT retornado e use o botao `Authorize` com o valor `Bearer <token>`.
+
 ## Testes
 
 Suite atual:

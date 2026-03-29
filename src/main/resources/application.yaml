@@ -60,7 +60,7 @@ management:
       type: w3c,b3                    # suporta W3C Trace Context e B3
   otlp:
     tracing:
-      endpoint: http://localhost:4317 # endpoint OTLP gRPC do Jaeger
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
 
 stripe:
   secret-key: ${STRIPE_SECRET_KEY}
